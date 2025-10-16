@@ -32,6 +32,25 @@ const Auth = () => {
     }
   }, []);
 
+  // If we arrived with ?mode=auth, handle browser Back to show ModeSelection
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'auth') {
+        const onPop = () => {
+          // Show mode selection UI
+          setShowModeSelection(true);
+          // Remove query param from URL for a cleaner state
+          try { window.history.replaceState({}, '', '/auth'); } catch (e) {}
+        };
+        window.addEventListener('popstate', onPop);
+        return () => window.removeEventListener('popstate', onPop);
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, []);
+
   // Redirect if already logged in or in guest mode
   useEffect(() => {
     if ((user || isGuestMode) && !loading) {

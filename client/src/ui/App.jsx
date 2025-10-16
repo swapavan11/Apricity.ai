@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../components/AuthProvider.jsx'
@@ -15,6 +15,21 @@ function AppContent() {
   const isHomePage = location.pathname === '/'
   const { user, loading, isGuestMode, exitGuestMode } = useAuth()
   const navigate = useNavigate()
+
+  // On first open in this tab, redirect to Home so initial link opens Home
+  React.useEffect(() => {
+    try {
+      const key = 'quizhive_first_open_done'
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1')
+        if (location.pathname !== '/') {
+          navigate('/')
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, [])
 
   // API functions for source selector
   const useApi = () => {

@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider.jsx';
 import { useNavigate } from 'react-router-dom';
 
 const ModeSelection = ({ onModeSelected }) => {
   const { enterGuestMode } = useAuth();
   const navigate = useNavigate();
+
+  // if user presses browser Back while on ModeSelection, go to Home
+  useEffect(() => {
+    const onPop = () => navigate('/');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [navigate]);
 
   return (
     <div style={{

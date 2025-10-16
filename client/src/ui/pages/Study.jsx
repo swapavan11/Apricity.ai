@@ -23,8 +23,8 @@ function useApi() {
       const res = await fetch(`${base}/api/rag/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, documentId, allowGeneral, chatId, createIfMissing }) })
       return res.json()
     },
-    genQuiz: async (documentId, mcqCount, saqCount, laqCount) => {
-      const res = await fetch(`${base}/api/quiz/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId, mcqCount, saqCount, laqCount }) })
+    genQuiz: async (documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic) => {
+      const res = await fetch(`${base}/api/quiz/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic }) })
       return res.json()
     },
     scoreQuiz: async (payload) => {
@@ -64,12 +64,20 @@ export default function Study({ selected, docs }) {
   const [loadingQuiz, setLoadingQuiz] = useState(false)
   const [loadingScore, setLoadingScore] = useState(false)
   const [quizCount, setQuizCount] = useState(5)
+  const [onewordCount, setOnewordCount] = useState(0)
   const [saqCount, setSaqCount] = useState(0)
   const [laqCount, setLaqCount] = useState(0)
+  const [quizPrompt, setQuizPrompt] = useState('')
+  const [quizMode, setQuizMode] = useState('select') // 'auto' | 'select' | 'custom'
+  const [topicDocId, setTopicDocId] = useState(selected || 'all')
+  const [topicList, setTopicList] = useState([])
+  const [selectedTopic, setSelectedTopic] = useState('')
+  const [validationError, setValidationError] = useState('')
   const [leftPanelWidth, setLeftPanelWidth] = useState(50)
   const [chatHistoryVisible, setChatHistoryVisible] = useState(false)
   const [attemptHistory, setAttemptHistory] = useState(null)
   const [loadingAttemptHistory, setLoadingAttemptHistory] = useState(false)
+ 
 
   // Function to refresh YouTube recommendations
   const refreshYouTubeRecommendations = async () => {
@@ -116,6 +124,20 @@ export default function Study({ selected, docs }) {
       setAttemptHistory(null)
     }
   }, [selected])
+
+  // fetch topic list for a selected PDF when using Select mode
+  useEffect(() => {
+    const docId = topicDocId === 'all' ? null : topicDocId
+    setTopicList([])
+    setSelectedTopic('')
+    if (!docId) return
+    let mounted = true
+    fetch(`/api/quiz/topics?documentId=${docId}`).then(r=>r.json()).then(j=>{
+      if (!mounted) return
+      if (j && Array.isArray(j.topics)) setTopicList(j.topics)
+    }).catch(()=>{})
+    return () => { mounted = false }
+  }, [topicDocId])
 
   const onAsk = async () => {
     setAnswer('')
@@ -165,21 +187,56 @@ export default function Study({ selected, docs }) {
 
   const onGenQuiz = async () => {
     setLoadingQuiz(true)
+    setValidationError('')
     try {
       const mcqCount = Math.max(0, Math.min(20, Number(quizCount)||5))
       const saqCountVal = Math.max(0, Math.min(10, Number(saqCount)||0))
       const laqCountVal = Math.max(0, Math.min(5, Number(laqCount)||0))
-      const res = await api.genQuiz(selected==='all'?null:selected, mcqCount, saqCountVal, laqCountVal)
+      // determine documentId and instructions based on quizMode
+      let documentIdToUse = null
+      let instructionsToUse = ''
+      if (quizMode === 'auto') {
+        documentIdToUse = selected === 'all' ? null : selected
+      } else if (quizMode === 'select') {
+        documentIdToUse = topicDocId === 'all' ? null : topicDocId
+      } else if (quizMode === 'custom') {
+        documentIdToUse = selected === 'all' ? null : selected
+        instructionsToUse = quizPrompt
+      }
+
+      const onewordCountVal = Math.max(0, Math.min(20, Number(onewordCount)||0))
+
+      // combine selected topic into instructions when using Select mode
+      let combinedInstructions = instructionsToUse || ''
+      if (quizMode === 'select' && selectedTopic) {
+        combinedInstructions = (combinedInstructions ? combinedInstructions + '\n' : '') + `Focus topic: ${selectedTopic}`
+      }
+
+      // warn/abort if totals are very large
+      const totalRequested = mcqCount + onewordCountVal + saqCountVal + laqCountVal
+      if (totalRequested > 80) {
+        setValidationError('Requested too many questions. Please reduce the total to 80 or fewer.')
+        setLoadingQuiz(false)
+        return
+      }
+
+      const res = await api.genQuiz(documentIdToUse, mcqCount, onewordCountVal, saqCountVal, laqCountVal, combinedInstructions, selectedTopic)
       setQuiz(res)
       setAnswers({})
       setScore(null)
     } catch (err) {
       console.error('Quiz generation error:', err)
+      // If an error occurred from the server or network, show a neutral empty quiz
       setQuiz({ questions: [] })
     } finally {
       setLoadingQuiz(false)
     }
   }
+
+  // Clear validation messages when relevant inputs change
+  useEffect(() => {
+    if (validationError) setValidationError('')
+  }, [quizCount, onewordCount, saqCount, laqCount, quizMode, selectedTopic, topicDocId, quizPrompt])
 
   const onScore = async () => {
     if (!quiz?.questions?.length) return
@@ -529,6 +586,58 @@ export default function Study({ selected, docs }) {
                   </p>
                 </div>
 
+                <div style={{marginBottom:'12px'}}>
+                  <div style={{display:'flex', gap:12, alignItems:'center', justifyContent:'center', marginBottom:8}}>
+                    <label style={{display:'flex', alignItems:'center', gap:8}}>
+                      <input type="radio" name="quizMode" value="auto" checked={quizMode==='auto'} onChange={()=>setQuizMode('auto')} />
+                      <span>Auto (use current source selector)</span>
+                    </label>
+                    <label style={{display:'flex', alignItems:'center', gap:8}}>
+              <input type="radio" name="quizMode" value="select" checked={quizMode==='select'} onChange={()=>{ if(docs.length>0) setQuizMode('select')}} disabled={docs.length === 0} />
+                      <span>Select PDF / Topic</span>
+                    </label>
+                    <label style={{display:'flex', alignItems:'center', gap:8}}>
+                      <input type="radio" name="quizMode" value="custom" checked={quizMode==='custom'} onChange={()=>setQuizMode('custom')} />
+                      <span>Custom instructions</span>
+                    </label>
+                  </div>
+
+                  {/* topic dropdown for select mode */}
+                  {quizMode === 'select' && (
+                    <div style={{display:'flex', justifyContent:'center', marginBottom:12}}>
+                      {docs.length === 0 ? (
+                        <div style={{color:'var(--muted)'}}>No uploaded PDFs yet. Upload a PDF to enable the Select option.</div>
+                      ) : (
+                        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                          <select value={topicDocId} onChange={(e)=>setTopicDocId(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'#0f1530', color:'var(--text)'}}>
+                            <option value="all">All uploaded PDFs</option>
+                            {docs.map(d => <option key={d._id} value={d._id}>{d.title} ({d.pages}p)</option>)}
+                          </select>
+                          {topicList.length > 0 && (
+                            <select value={selectedTopic} onChange={(e)=>setSelectedTopic(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'#0f1530', color:'var(--text)'}}>
+                              <option value="">All topics</option>
+                              {topicList.map((t, idx) => <option key={idx} value={t}>{t}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* custom instructions input */}
+                  {quizMode === 'custom' && (
+                    <div style={{display:'flex', justifyContent:'center', marginBottom:12}}>
+                      <textarea
+                        rows={3}
+                        value={quizPrompt}
+                        onChange={(e)=>setQuizPrompt(e.target.value)}
+                        placeholder={"E.g. Focus on Chapter 3: Kinematics. Make MCQs application-level; include numerical problems where relevant. (Do NOT include question counts — set counts using the fields below.)"}
+                        style={{width:'80%', padding:'10px 12px', borderRadius:8, background:'#0f1530', color:'var(--text)', border:'1px solid #1f2b57', resize:'vertical'}}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'16px', marginBottom:'20px'}}>
                   <div className="section" style={{textAlign:'center'}}>
                     <div style={{fontSize:'2em', marginBottom:'8px'}}>🔘</div>
@@ -549,7 +658,26 @@ export default function Study({ selected, docs }) {
                       />
                     </div>
                   </div>
-                  
+                  <div className="section" style={{textAlign:'center'}}>
+                    <div style={{fontSize:'2em', marginBottom:'8px'}}>🔤</div>
+                    <h4 style={{marginTop:0, marginBottom:'8px', color:'var(--accent2)'}}>One-Word Answers</h4>
+                    <p style={{fontSize:'0.9em', color:'var(--muted)', marginBottom:'12px'}}>
+                      Single-token answers (word or number). Good for definitions, formulas, or short numerical values.
+                    </p>
+                    <div>
+                      <div style={{fontSize:'0.85em', color:'var(--muted)', marginBottom:'4px'}}>Number of One-Word Questions</div>
+                      <input 
+                        type="number" 
+                        min={0} 
+                        max={20} 
+                        value={onewordCount} 
+                        onChange={(e)=>setOnewordCount(e.target.value)} 
+                        placeholder="0-20" 
+                        style={{width:'100px', textAlign:'center'}} 
+                      />
+                    </div>
+                  </div>
+
                   <div className="section" style={{textAlign:'center'}}>
                     <div style={{fontSize:'2em', marginBottom:'8px'}}>📝</div>
                     <h4 style={{marginTop:0, marginBottom:'8px', color:'var(--accent2)'}}>Short Answer Questions (SAQ)</h4>
@@ -594,7 +722,7 @@ export default function Study({ selected, docs }) {
                 <div style={{textAlign:'center', marginBottom:'20px'}}>
                   <button 
                     onClick={onGenQuiz} 
-                    disabled={loadingQuiz || (quizCount == 0 && saqCount == 0 && laqCount == 0)}
+                    disabled={loadingQuiz || validationError || (quizCount == 0 && onewordCount == 0 && saqCount == 0 && laqCount == 0)}
                     style={{padding:'12px 24px', fontSize:'16px', display:'flex', alignItems:'center', gap:'8px', margin:'0 auto'}}
                   >
                     {loadingQuiz ? (
@@ -611,9 +739,15 @@ export default function Study({ selected, docs }) {
                       </>
                     )}
                   </button>
-                  {(quizCount == 0 && saqCount == 0 && laqCount == 0) && (
+                  {(quizCount == 0 && onewordCount == 0 && saqCount == 0 && laqCount == 0) && (
                     <div style={{fontSize:'12px', color:'var(--muted)', marginTop:'8px'}}>
                       Please select at least one question type
+                    </div>
+                  )}
+
+                  {validationError && (
+                    <div style={{marginTop:8, color:'#ffb4b4', background:'#3b1a1a', display:'inline-block', padding:'8px 12px', borderRadius:8, fontSize:'13px'}}>
+                      {validationError}
                     </div>
                   )}
                 </div>
@@ -685,21 +819,31 @@ export default function Study({ selected, docs }) {
                             })}
                           </div>
                         )}
-                        {(q.type === 'SAQ' || q.type === 'LAQ') && (
+                        {(q.type === 'SAQ' || q.type === 'LAQ' || q.type === 'ONEWORD') && (
                           <div style={{marginTop:8}}>
-                            <textarea 
-                              rows={q.type === 'LAQ' ? 4 : 2}
-                              style={{width:'100%', background:'#0f1530', color:'var(--text)', border:'1px solid #1f2b57', borderRadius:10, padding:10}}
-                              placeholder={`Your ${q.type} answer...`}
-                              value={answers[q.id] || ''}
-                              onChange={(e)=>setAnswers(a=>({...a, [q.id]: e.target.value}))}
-                            />
+                            {q.type === 'ONEWORD' ? (
+                              <input
+                                type="text"
+                                value={answers[q.id] || ''}
+                                onChange={(e)=>setAnswers(a=>({...a, [q.id]: e.target.value}))}
+                                placeholder="One-word or numeric answer"
+                                style={{width:'50%', padding:8, borderRadius:8, background:'#0f1530', color:'var(--text)', border:'1px solid #1f2b57'}}
+                              />
+                            ) : (
+                              <textarea 
+                                rows={q.type === 'LAQ' ? 4 : 2}
+                                style={{width:'100%', background:'#0f1530', color:'var(--text)', border:'1px solid #1f2b57', borderRadius:10, padding:10}}
+                                placeholder={`Your ${q.type} answer...`}
+                                value={answers[q.id] || ''}
+                                onChange={(e)=>setAnswers(a=>({...a, [q.id]: e.target.value}))}
+                              />
+                            )}
                           </div>
                         )}
                         {score && (
                           <div style={{marginTop:8, color:'var(--muted)'}}>
                             <div>p.{q.page} • {q.explanation}</div>
-                            {(q.type === 'SAQ' || q.type === 'LAQ') && (
+                            {(q.type === 'SAQ' || q.type === 'LAQ' || q.type === 'ONEWORD') && (
                               <div style={{marginTop:6, padding:8, background:'#0b1024', borderRadius:6}}>
                                 <div style={{fontWeight:700, color:'var(--text)'}}>Expected Answer:</div>
                                 <div style={{whiteSpace:'pre-wrap'}}>{q.answer}</div>
@@ -756,7 +900,7 @@ export default function Study({ selected, docs }) {
                           {score.analytics && (
                             <div style={{marginTop:12, padding:12, background:'#0b1024', borderRadius:8, border:'1px solid #1a244d'}}>
                               <div style={{fontWeight:700, marginBottom:8, color:'var(--accent)'}}>Performance Breakdown</div>
-                              <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, marginBottom:8}}>
+                              <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8, marginBottom:8}}>
                                 <div style={{textAlign:'center'}}>
                                   <div style={{fontSize:'0.8em', color:'var(--muted)'}}>MCQ</div>
                                   <div style={{fontWeight:700, color: score.analytics.mcqAccuracy >= 0.8 ? '#6ee7b7' : score.analytics.mcqAccuracy >= 0.6 ? '#ffa500' : '#ff7c7c'}}>
@@ -773,6 +917,12 @@ export default function Study({ selected, docs }) {
                                   <div style={{fontSize:'0.8em', color:'var(--muted)'}}>LAQ</div>
                                   <div style={{fontWeight:700, color: score.analytics.laqAccuracy >= 0.8 ? '#6ee7b7' : score.analytics.laqAccuracy >= 0.6 ? '#ffa500' : '#ff7c7c'}}>
                                     {(score.analytics.laqAccuracy*100).toFixed(0)}%
+                                  </div>
+                                </div>
+                                <div style={{textAlign:'center'}}>
+                                  <div style={{fontSize:'0.8em', color:'var(--muted)'}}>ONEWORD</div>
+                                  <div style={{fontWeight:700, color: score.analytics.onewordAccuracy >= 0.8 ? '#6ee7b7' : score.analytics.onewordAccuracy >= 0.6 ? '#ffa500' : '#ff7c7c'}}>
+                                    {(score.analytics.onewordAccuracy*100).toFixed(0)}%
                                   </div>
                                 </div>
                               </div>
@@ -1102,6 +1252,14 @@ export default function Study({ selected, docs }) {
                                   {Math.round(attempt.laqAccuracy * 100)}%
                                 </div>
                                 <div style={{fontSize:'11px', color:'var(--muted)'}}>LAQ</div>
+                              </div>
+                            )}
+                            {attempt.onewordAccuracy !== undefined && (
+                              <div style={{textAlign:'center'}}>
+                                <div style={{fontSize:'16px', fontWeight:600}}>
+                                  {Math.round(attempt.onewordAccuracy * 100)}%
+                                </div>
+                                <div style={{fontSize:'11px', color:'var(--muted)'}}>ONEWORD</div>
                               </div>
                             )}
                           </div>
