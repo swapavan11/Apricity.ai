@@ -594,7 +594,7 @@ export default function Study({ selected, docs }) {
                     </label>
                     <label style={{display:'flex', alignItems:'center', gap:8}}>
               <input type="radio" name="quizMode" value="select" checked={quizMode==='select'} onChange={()=>{ if(docs.length>0) setQuizMode('select')}} disabled={docs.length === 0} />
-                      <span>Select PDF / Topic</span>
+                      <span>Select Topic in PDF</span>
                     </label>
                     <label style={{display:'flex', alignItems:'center', gap:8}}>
                       <input type="radio" name="quizMode" value="custom" checked={quizMode==='custom'} onChange={()=>setQuizMode('custom')} />
