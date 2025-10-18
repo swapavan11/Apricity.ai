@@ -5,6 +5,7 @@ import fetch from 'node-fetch';
 import { extractPagesText } from './lib/pdf.js';
 import { connectMongo } from './lib/mongo.js';
 import Document from './models/Document.js';
+import User from './models/User.js';
 
 const uploadsDir = path.resolve('server/uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -33,6 +34,16 @@ async function createDocFromPdf(filePath, title) {
   const pageTexts = parsed.pages;
   const chunks = pageTexts.map((t, i) => ({ page: i + 1, text: t || '' }));
   const stat = fs.statSync(filePath);
+  // Ensure a test user exists to satisfy required uploadedBy field
+  let testUser = await User.findOne({ email: 'seed@example.com' });
+  if (!testUser) {
+    testUser = await User.create({
+      email: 'seed@example.com',
+      name: 'Seed User',
+      password: 'password123'
+    });
+  }
+
   return await Document.create({
     title,
     filename: path.basename(filePath),
@@ -41,6 +52,7 @@ async function createDocFromPdf(filePath, title) {
     pages,
     storagePath: filePath,
     chunks,
+    uploadedBy: testUser._id
   });
 }
 

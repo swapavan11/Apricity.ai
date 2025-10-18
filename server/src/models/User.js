@@ -86,10 +86,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better query performance
-userSchema.index({ email: 1 });
-userSchema.index({ mobile: 1 });
-userSchema.index({ googleId: 1 });
+// Note: index creation is handled via field options (unique/sparse). Avoid duplicate schema.index calls.
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

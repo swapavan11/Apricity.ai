@@ -166,35 +166,44 @@ router.post('/', upload.single('pdf'), async (req, res) => {
       }
     }
 
-    // Create document
-    const doc = await Document.create({
-      title: req.body.title || req.file.originalname,
-      filename: req.file.filename,
-      mimeType: req.file.mimetype,
-      size: req.file.size,
-      pages,
-      storagePath: req.file.path, // Keep local copy
-      cloudinaryUrl: cloudinaryUrl,
-      cloudinaryPublicId: cloudinaryPublicId,
-      uploadedBy: user ? user._id : null, // null for guest users
-      tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
-      description: req.body.description || '',
-      chunks,
-    });
-
-    // Update user's documents array if authenticated
+    // Create and persist document only for authenticated users.
+    // Guest uploads are handled in-memory/local only and are not saved to DB
+    // to avoid requiring uploadedBy and leaking guest data.
+    let doc = null;
     if (user) {
-      await user.updateOne({ $push: { documents: doc._id } });
-    }
+      doc = await Document.create({
+        title: req.body.title || req.file.originalname,
+        filename: req.file.filename,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        pages,
+        storagePath: req.file.path, // Keep local copy
+        cloudinaryUrl: cloudinaryUrl,
+        cloudinaryPublicId: cloudinaryPublicId,
+        uploadedBy: user._id,
+        tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
+        description: req.body.description || '',
+        chunks,
+      });
 
-    console.log('Document created:', { 
-      id: doc._id, 
-      title: doc.title, 
-      pages: doc.pages, 
-      chunksCount: doc.chunks.length,
-      cloudinaryUrl: cloudinaryUrl,
-      isGuest: !user
-    });
+      // Update user's documents array
+      await user.updateOne({ $push: { documents: doc._id } });
+
+      console.log('Document created:', {
+        id: doc._id,
+        title: doc.title,
+        pages: doc.pages,
+        chunksCount: doc.chunks.length,
+        cloudinaryUrl: cloudinaryUrl,
+        isGuest: false
+      });
+    } else {
+      console.log('Guest upload processed (not persisted):', {
+        filename: req.file.filename,
+        pages,
+        chunksCount: chunks.length
+      });
+    }
 
     // Clean up local file after successful upload (only for authenticated users with Cloudinary)
     if (user && cloudinaryUrl) {
@@ -205,16 +214,24 @@ router.post('/', upload.single('pdf'), async (req, res) => {
       }
     }
 
-    res.json({ 
+    const responseDocument = doc ? {
+      id: doc._id,
+      pages: doc.pages,
+      title: doc.title,
+      cloudinaryUrl: cloudinaryUrl,
+      isGuest: false
+    } : {
+      id: null,
+      pages,
+      title: req.body.title || req.file.originalname,
+      cloudinaryUrl: cloudinaryUrl,
+      isGuest: true
+    };
+
+    res.json({
       success: true,
       message: user ? 'PDF uploaded successfully' : 'PDF uploaded successfully (Guest mode - data will be lost on page refresh)',
-      document: {
-        id: doc._id, 
-        pages: doc.pages, 
-        title: doc.title,
-        cloudinaryUrl: cloudinaryUrl,
-        isGuest: !user
-      }
+      document: responseDocument
     });
   } catch (error) {
     console.error('Upload error:', error);
