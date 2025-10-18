@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function PdfViewer({ api, selected, docs }) {
+export default function PdfViewer({ api, doc }) {
   return (
     <div
       style={{
@@ -10,10 +10,10 @@ export default function PdfViewer({ api, selected, docs }) {
         flexDirection: "column",
       }}
     >
-      {selected !== "all" ? (
+      {doc ? (
         <iframe
           title="pdf"
-          src={api.docFileUrl(selected)}
+          src={api.resolveDocUrl(doc)}
           style={{ width: "100%", height: "100%", border: "none" }}
         />
       ) : (

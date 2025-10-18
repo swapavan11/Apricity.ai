@@ -158,7 +158,8 @@ export default function Study({ selected, docs }) {
           overflow: "hidden"
         }}
       >
-        <PdfViewer api={api} selected={selected} docs={docs} />
+  {/* pass the selected document object so viewer can resolve cloudinary/local/protected URLs */}
+  <PdfViewer api={api} doc={docs.find(d => d._id === selected)} />
       </div>
 
       {/* Resize handle */}

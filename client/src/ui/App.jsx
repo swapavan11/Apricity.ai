@@ -366,9 +366,24 @@ function AppContent() {
     if (!f) return;
     const res = await api.uploadPdf(f, f.name);
     if (res.success) {
-      const all = await api.listDocs();
-      setDocs(all);
-      setSelected(res.document.id);
+      if (res.document && res.document.isGuest) {
+        // Guest upload: not persisted to server. Add a temporary in-memory doc so
+        // the source selector and viewer can display it immediately.
+        const tempId = `local:${f.name}:${Date.now()}`;
+        const tempDoc = {
+          _id: tempId,
+          title: res.document.title || f.name,
+          pages: res.document.pages || 0,
+          cloudinaryUrl: res.document.cloudinaryUrl || null,
+          localUrl: res.document.localUrl || `/api/upload/local/${encodeURIComponent(res.document.localUrl ? res.document.localUrl.split('/').pop() : f.name)}`
+        };
+        setDocs(prev => [tempDoc, ...(prev || [])]);
+        setSelected(tempId);
+      } else {
+        const all = await api.listDocs();
+        setDocs(all);
+        setSelected(res.document.id);
+      }
     }
   };
 

@@ -12,7 +12,18 @@ export default function useApi() {
       const res = await fetch(`${base}/api/upload`, { method: "POST", body: fd });
       return res.json();
     },
-    docFileUrl: (id) => `${base}/api/upload/${id}/file`,
+    docFileUrl: (id, token) => {
+      const url = `${base}/api/upload/${id}/file`;
+      if (token) return `${url}?token=${encodeURIComponent(token)}`;
+      return url;
+    },
+    resolveDocUrl: (doc) => {
+      if (!doc) return null;
+      if (doc.cloudinaryUrl) return doc.cloudinaryUrl;
+      if (doc.localUrl) return doc.localUrl;
+      if (doc._id || doc.id) return `${base}/api/upload/${doc._id || doc.id}/file`;
+      return null;
+    },
 
     // Chat APIs
     listChats: async (documentId) =>

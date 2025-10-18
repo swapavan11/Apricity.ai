@@ -11,7 +11,19 @@ function useApi() {
       const res = await fetch(`${base}/api/upload`, { method: 'POST', body: fd })
       return res.json()
     },
-    docFileUrl: (id) => `${base}/api/upload/${id}/file`,
+    docFileUrl: (id, token) => {
+      const url = `${base}/api/upload/${id}/file`;
+      if (token) return `${url}?token=${encodeURIComponent(token)}`;
+      return url;
+    },
+    resolveDocUrl: (doc) => {
+      // Priority: cloudinaryUrl > localUrl (returned from upload) > protected file URL
+      if (!doc) return null;
+      if (doc.cloudinaryUrl) return doc.cloudinaryUrl;
+      if (doc.localUrl) return doc.localUrl;
+      if (doc.id) return `${base}/api/upload/${doc.id}/file`;
+      return null;
+    },
     // Chat APIs
     listChats: async (documentId) => (await fetch(`${base}/api/rag/chats${documentId?`?documentId=${documentId}`:''}`)).json(),
     getChat: async (chatId) => (await fetch(`${base}/api/rag/chats/${chatId}`)).json(),
@@ -279,12 +291,12 @@ export default function Study({ selected, docs }) {
       >
         {/* PDF Viewer - Full Size */}
         <div style={{flex:1, height:'100%', display:'flex', flexDirection:'column'}}>
-          {selected!=='all' ? (
-            <div style={{flex:1, height:'100%'}}>
-              <iframe 
-                title="pdf" 
-                src={api.docFileUrl(selected)} 
-                style={{width:'100%', height:'100%', border:'none'}} 
+          {selected !== 'all' && docs && docs.length ? (
+            <div style={{ flex: 1, height: '100%' }}>
+              <iframe
+                title="pdf"
+                src={api.resolveDocUrl(docs.find(d => d._id === selected))}
+                style={{ width: '100%', height: '100%', border: 'none' }}
               />
             </div>
           ) : (

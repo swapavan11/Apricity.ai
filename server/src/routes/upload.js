@@ -227,6 +227,9 @@ router.post('/', upload.single('pdf'), async (req, res) => {
       cloudinaryUrl: cloudinaryUrl,
       isGuest: true
     };
+    // Provide a local URL for immediate viewing (guest uploads or when Cloudinary not used)
+    const localUrl = `/api/upload/local/${encodeURIComponent(req.file.filename)}`;
+    responseDocument.localUrl = localUrl;
 
     res.json({
       success: true,
@@ -282,43 +285,78 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Get PDF file (from Cloudinary or local)
-router.get('/:id/file', authenticateToken, async (req, res) => {
+// Serve local uploaded file by filename (for immediate guest preview). Files are served
+// directly from server/uploads. This is intentionally simple; in production you may
+// want to protect or sign these URLs and remove files after a time window.
+router.get('/local/:filename', (req, res) => {
   try {
-    const doc = await Document.findOne({ 
-      _id: req.params.id, 
-      uploadedBy: req.user._id 
-    });
-    
-    if (!doc) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Document not found' 
-      });
+    const filename = req.params.filename;
+    const filePath = path.join(uploadsDir, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File not found' });
+    res.setHeader('Content-Type', 'application/pdf');
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    console.error('Local file serve error:', err);
+    res.status(500).json({ success: false, message: 'Failed to serve file', error: err.message });
+  }
+});
+
+// Get PDF file (from Cloudinary or local)
+// This route accepts optional token: if the document is public or a guest upload
+// the file will be served without authentication. Persisted private documents
+// still require a matching token (owner) to access.
+router.get('/:id/file', async (req, res) => {
+  try {
+  // Try to parse token if present (Authorization: Bearer ...) or via query ?token=
+  const authHeader = req.headers['authorization'];
+  const queryToken = req.query && req.query.token;
+  const token = (authHeader && authHeader.split(' ')[1]) || queryToken;
+    let decodedUserId = null;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, config.JWT_SECRET);
+        decodedUserId = decoded.id;
+      } catch (e) {
+        // invalid token - ignore and treat as unauthenticated
+        decodedUserId = null;
+      }
     }
 
-    // If Cloudinary URL exists, redirect to it
+    // Find the document (do not filter by uploadedBy so public/guest docs are reachable)
+    const doc = await Document.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    // If Cloudinary URL exists, redirect to it (Cloudinary URL is public)
     if (doc.cloudinaryUrl) {
       return res.redirect(doc.cloudinaryUrl);
     }
 
-    // Fallback to local file
+    // If document is public or has no owner (guest upload), serve local file
+    if (doc.isPublic || !doc.uploadedBy) {
+      if (doc.storagePath && fs.existsSync(doc.storagePath)) {
+        res.setHeader('Content-Type', doc.mimeType || 'application/pdf');
+        return fs.createReadStream(doc.storagePath).pipe(res);
+      }
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    // For persisted private documents, require matching owner id from token
+    if (!decodedUserId || decodedUserId.toString() !== doc.uploadedBy.toString()) {
+      return res.status(401).json({ success: false, message: 'Access token required' });
+    }
+
+    // Authenticated owner can access local file
     if (doc.storagePath && fs.existsSync(doc.storagePath)) {
       res.setHeader('Content-Type', doc.mimeType || 'application/pdf');
-      fs.createReadStream(doc.storagePath).pipe(res);
-    } else {
-      res.status(404).json({ 
-        success: false,
-        message: 'File not found' 
-      });
+      return fs.createReadStream(doc.storagePath).pipe(res);
     }
+
+    return res.status(404).json({ success: false, message: 'File not found' });
   } catch (error) {
     console.error('Get file error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch file',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch file', error: error.message });
   }
 });
 
