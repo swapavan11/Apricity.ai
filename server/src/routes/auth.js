@@ -367,14 +367,16 @@ router.get('/google', passport.authenticate('google', {
 }));
 
 router.get('/google/callback',
-  passport.authenticate('google', { failureRedirect: `${config.FRONTEND_URL}/login?error=google_auth_failed` }),
+  passport.authenticate('google', { failureRedirect: `${config.FRONTEND_URL}/auth?mode=auth&error=google_auth_failed` }),
   async (req, res) => {
     try {
       const token = generateToken(req.user._id);
-      res.redirect(`${config.FRONTEND_URL}/auth/callback?token=${token}`);
+      // Try to extract status info from passport auth (if available on req.authInfo)
+      const status = req.authInfo?.status || 'returning';
+      res.redirect(`${config.FRONTEND_URL}/auth/callback?token=${token}&status=${encodeURIComponent(status)}`);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
-      res.redirect(`${config.FRONTEND_URL}/login?error=oauth_callback_failed`);
+      res.redirect(`${config.FRONTEND_URL}/auth?mode=auth&error=oauth_callback_failed`);
     }
   }
 );

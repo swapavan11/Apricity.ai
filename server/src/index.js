@@ -37,8 +37,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
+    // In production you should serve over HTTPS so secure can be true
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: 'lax', // Allow OAuth redirect back to this server to carry the session
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));

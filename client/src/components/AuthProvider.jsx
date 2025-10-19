@@ -49,6 +49,33 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, [token]);
 
+  // Complete OAuth login by accepting a token from a redirect/callback
+  const completeOAuthLogin = async (incomingToken) => {
+    try {
+      if (!incomingToken) throw new Error('Missing token');
+      // Persist token and set axios header immediately
+      localStorage.setItem('token', incomingToken);
+      setToken(incomingToken);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${incomingToken}`;
+
+      // Fetch profile so UI updates without a full page reload
+      const response = await axios.get('/api/auth/profile');
+      setUser(response.data.user);
+      setIsGuestMode(false);
+      return { success: true };
+    } catch (error) {
+      // If anything fails, clear token state
+      console.error('OAuth completion failed:', error);
+      localStorage.removeItem('token');
+      setToken(null);
+      delete axios.defaults.headers.common['Authorization'];
+      return { 
+        success: false, 
+        message: error.response?.data?.message || error.message || 'OAuth login failed' 
+      };
+    }
+  };
+
   const login = async (email, password) => {
     try {
       const response = await axios.post('/api/auth/login', { email, password });
@@ -201,7 +228,8 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateProfile,
     enterGuestMode,
-    exitGuestMode
+    exitGuestMode,
+    completeOAuthLogin
   };
 
   return (

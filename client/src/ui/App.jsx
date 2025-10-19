@@ -314,12 +314,14 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Auth from "./pages/Auth.jsx";
 import "./styles.css"; // ✅ import theme styles once globally
 import useApi from '../api/useApi'
+import OAuthCallback from './pages/OAuthCallback.jsx'
 
 function AppContent() {
   const [docs, setDocs] = useState([]);
   const [selected, setSelected] = useState("all");
   const location = useLocation();
   const isHomePage = location.pathname === "/";
+  const isOAuthCallback = location.pathname.startsWith('/auth/callback');
   const { user, loading, isGuestMode, exitGuestMode } = useAuth();
   const navigate = useNavigate();
 
@@ -401,6 +403,17 @@ function AppContent() {
           ></div>
           <div>Loading...</div>
         </div>
+      </div>
+    );
+  }
+
+  // OAuth callback route must be accessible before auth state is set
+  if (isOAuthCallback) {
+    return (
+      <div className="content" style={{ height: "100vh" }}>
+        <Routes>
+          <Route path="/auth/callback" element={<OAuthCallback />} />
+        </Routes>
       </div>
     );
   }
@@ -573,6 +586,7 @@ function AppContent() {
             <Route path="/" element={<Home />} />
             <Route path="/study" element={<Study selected={selected} docs={docs} />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/auth/callback" element={<OAuthCallback />} />
           </Routes>
         </div>
       </div>

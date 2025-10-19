@@ -24,34 +24,43 @@ passport.use(new JwtStrategy({
 passport.use(new GoogleStrategy({
   clientID: config.GOOGLE_CLIENT_ID,
   clientSecret: config.GOOGLE_CLIENT_SECRET,
-  callbackURL: config.GOOGLE_CALLBACK_URL
+  callbackURL: config.GOOGLE_CALLBACK_URL || `${config.BACKEND_URL}/api/auth/google/callback`
 }, async (accessToken, refreshToken, profile, done) => {
   try {
+    // Basic guards for required fields
+    const email = profile?.emails?.[0]?.value;
+    const name = profile?.displayName || profile?.name?.givenName || 'Google User';
+    const avatar = profile?.photos?.[0]?.value || null;
+
+    if (!email) {
+      return done(new Error('Google account has no accessible email address'), null);
+    }
+
     // Check if user already exists with this Google ID
     let user = await User.findOne({ googleId: profile.id });
     
     if (user) {
-      return done(null, user);
+      return done(null, user, { status: 'returning' });
     }
 
     // Check if user exists with this email
-    user = await User.findOne({ email: profile.emails[0].value });
+    user = await User.findOne({ email });
     
     if (user) {
       // Link Google account to existing user
       user.googleId = profile.id;
-      user.avatar = profile.photos[0]?.value;
+      user.avatar = avatar;
       user.isEmailVerified = true; // Google emails are pre-verified
       await user.save();
-      return done(null, user);
+      return done(null, user, { status: 'linked' });
     }
 
     // Create new user
     user = new User({
       googleId: profile.id,
-      name: profile.displayName,
-      email: profile.emails[0].value,
-      avatar: profile.photos[0]?.value,
+      name,
+      email,
+      avatar,
       isEmailVerified: true, // Google emails are pre-verified
       preferences: {
         theme: 'dark',
@@ -63,7 +72,7 @@ passport.use(new GoogleStrategy({
     });
 
     await user.save();
-    return done(null, user);
+    return done(null, user, { status: 'new' });
   } catch (error) {
     console.error('Google OAuth error:', error);
     return done(error, null);
