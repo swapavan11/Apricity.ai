@@ -7,8 +7,7 @@ import ModeSelection from '../../components/ModeSelection.jsx';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [showVerification, setShowVerification] = useState(false);
-  const [verificationData, setVerificationData] = useState(null);
+  // Legacy verification UI state not required anymore; flows are handled inside forms
   const [showModeSelection, setShowModeSelection] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -171,10 +170,7 @@ const Auth = () => {
           ) : (
             <RegisterForm 
               onSwitchToLogin={() => setIsLogin(true)}
-              onSuccess={() => {
-                setShowVerification(true);
-                setVerificationData({ email: formData.email, mobile: formData.mobile });
-              }}
+              onSuccess={() => navigate('/')}
             />
           )}
 

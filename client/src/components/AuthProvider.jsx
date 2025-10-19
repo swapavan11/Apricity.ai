@@ -115,6 +115,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Register with mobile only (no email/password) - server sends OTP
+  const registerMobile = async (name, mobile) => {
+    try {
+      const response = await axios.post('/api/auth/register-mobile', {
+        name,
+        mobile
+      });
+      return {
+        success: true,
+        message: response.data.message,
+        user: response.data.user
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Registration failed'
+      };
+    }
+  };
+
   const verifyEmail = async (token) => {
     try {
       const response = await axios.post('/api/auth/verify-email', { token });
@@ -133,9 +153,21 @@ export const AuthProvider = ({ children }) => {
   const verifyMobile = async (mobile, otp) => {
     try {
       const response = await axios.post('/api/auth/verify-mobile', { mobile, otp });
+      // If server returns a token and user, log in immediately
+      const newToken = response.data?.token;
+      const userData = response.data?.user;
+      if (newToken && userData) {
+        localStorage.setItem('token', newToken);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        setToken(newToken);
+        setUser(userData);
+        setIsGuestMode(false);
+      }
       return { 
         success: true, 
-        message: response.data.message 
+        message: response.data.message,
+        token: newToken,
+        user: userData
       };
     } catch (error) {
       return { 
@@ -221,6 +253,7 @@ export const AuthProvider = ({ children }) => {
     isGuestMode,
     login,
     register,
+  registerMobile,
     verifyEmail,
     verifyMobile,
     resendEmailVerification,

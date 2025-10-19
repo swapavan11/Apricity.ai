@@ -4,11 +4,12 @@ import { config } from './config.js';
 // Initialize Twilio client
 const client = twilio(config.TWILIO_ACCOUNT_SID, config.TWILIO_AUTH_TOKEN);
 
-// Send OTP via SMS
-export const sendOTP = async (mobile, otp) => {
+// Send OTP via SMS (optionally personalized with name)
+export const sendOTP = async (mobile, otp, name) => {
   try {
+    const greeting = name ? `Hi ${name}, ` : '';
     const message = await client.messages.create({
-      body: `Your QuizHive.ai verification code is: ${otp}. This code will expire in 10 minutes.`,
+      body: `${greeting}your QuizHive.ai verification code is: ${otp}. This code will expire in 10 minutes.`,
       from: config.TWILIO_PHONE_NUMBER,
       to: mobile
     });
@@ -78,17 +79,28 @@ export const sendPasswordResetSMS = async (mobile, name, resetUrl) => {
 
 // Validate mobile number format
 export const validateMobileNumber = (mobile) => {
-  // Remove all non-digit characters
-  const cleaned = mobile.replace(/\D/g, '');
-  
-  // Check if it's a valid mobile number (10-15 digits)
-  if (cleaned.length < 10 || cleaned.length > 15) {
+  if (!mobile || typeof mobile !== 'string') {
+    return { valid: false, error: 'Mobile number required' };
+  }
+
+  // If number already includes +, assume E.164-ish and validate length
+  const trimmed = mobile.trim();
+  if (trimmed.startsWith('+')) {
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 15) {
+      return { valid: false, error: 'Invalid mobile number length' };
+    }
+    return { valid: true, formatted: `+${digits}` };
+  }
+
+  // Otherwise, remove non-digits and prepend default country code
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 10 || digits.length > 15) {
     return { valid: false, error: 'Invalid mobile number length' };
   }
-  
-  // Add country code if not present (assuming US +1)
-  const formatted = cleaned.startsWith('1') ? `+${cleaned}` : `+1${cleaned}`;
-  
+
+  const cc = (config.SMS_DEFAULT_COUNTRY_CODE || '1').replace(/\D/g, '') || '1';
+  const formatted = `+${cc}${digits}`;
   return { valid: true, formatted };
 };
 

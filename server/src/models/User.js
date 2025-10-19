@@ -4,8 +4,11 @@ import bcrypt from 'bcryptjs';
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
-    required: true,
+    required: function() {
+      return !(this.mobileOnlyAuth || this.googleId);
+    },
     unique: true,
+    sparse: true,
     lowercase: true,
     trim: true
   },
@@ -18,13 +21,19 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: function() {
-      return !this.googleId; // Required only if not using Google OAuth
+      // Required only if not using Google OAuth or mobile-only auth
+      return !(this.googleId || this.mobileOnlyAuth);
     }
   },
   googleId: {
     type: String,
     unique: true,
     sparse: true
+  },
+  // Flag for accounts created with mobile OTP (no email/password required)
+  mobileOnlyAuth: {
+    type: Boolean,
+    default: false
   },
   name: {
     type: String,

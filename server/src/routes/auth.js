@@ -58,7 +58,7 @@ router.post('/register', async (req, res) => {
         const otp = user.generateMobileOTP();
         await user.save();
         
-        const smsResult = await sendOTP(mobileValidation.formatted, otp);
+  const smsResult = await sendOTP(mobileValidation.formatted, otp, user.name);
         if (!smsResult.success) {
           console.error('Failed to send SMS OTP:', smsResult.error);
         }
@@ -72,6 +72,71 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Registration failed',
+      error: error.message
+    });
+  }
+});
+
+// Register with mobile-only (OTP-based, no email/password)
+router.post('/register-mobile', async (req, res) => {
+  try {
+    const { name, mobile } = req.body;
+
+    if (!name || !mobile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and mobile are required'
+      });
+    }
+
+    // Validate mobile format
+    const mobileValidation = validateMobileNumber(mobile);
+    if (!mobileValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid mobile number format'
+      });
+    }
+
+    // Check if mobile already exists
+    const existingMobile = await User.findOne({ mobile: mobileValidation.formatted });
+    if (existingMobile) {
+      return res.status(409).json({
+        success: false,
+        message: 'Mobile number already registered'
+      });
+    }
+
+    // Create mobile-only user (no email/password)
+    const user = new User({
+      name,
+      mobile: mobileValidation.formatted,
+      mobileOnlyAuth: true,
+      isEmailVerified: false,
+      isMobileVerified: false
+    });
+
+    // Generate OTP and save
+    const otp = user.generateMobileOTP();
+    await user.save();
+
+    // Send OTP
+  const smsResult = await sendOTP(mobileValidation.formatted, otp, user.name);
+    if (!smsResult.success) {
+      console.error('Failed to send SMS OTP:', smsResult.error);
+      // We still created the user; allow retry of resend from client
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Account created. OTP sent to your mobile number.',
+      user: user.getPublicProfile()
+    });
+  } catch (error) {
+    console.error('Mobile-only registration error:', error);
     res.status(500).json({
       success: false,
       message: 'Registration failed',
@@ -200,9 +265,13 @@ router.post('/verify-mobile', async (req, res) => {
       await sendWelcomeSMS(mobileValidation.formatted, user.name);
     }
 
+    // If verification succeeded, provide JWT so client is authenticated
+    const token = generateToken(user._id);
     res.json({
       success: true,
-      message: 'Mobile number verified successfully'
+      message: 'Mobile number verified successfully',
+      token,
+      user: user.getPublicProfile()
     });
   } catch (error) {
     console.error('Mobile verification error:', error);
