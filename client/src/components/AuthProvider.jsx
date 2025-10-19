@@ -203,6 +203,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const uploadAvatar = async (file) => {
+    try {
+      const form = new FormData();
+      form.append('avatar', file);
+      const response = await axios.post('/api/auth/profile/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (response.data?.success) {
+        setUser(response.data.user);
+        return { success: true, avatar: response.data.avatar };
+      }
+      return { success: false, message: response.data?.message || 'Failed to upload avatar' };
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Failed to upload avatar' };
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -214,6 +231,7 @@ export const AuthProvider = ({ children }) => {
     resendEmailVerification,
     logout,
     updateProfile,
+    uploadAvatar,
     enterGuestMode,
     exitGuestMode,
     completeOAuthLogin

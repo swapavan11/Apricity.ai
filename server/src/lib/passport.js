@@ -10,7 +10,7 @@ passport.use(new JwtStrategy({
   secretOrKey: config.JWT_SECRET
 }, async (payload, done) => {
   try {
-    const user = await User.findById(payload.userId).select('-password');
+    const user = await User.findById(payload.userId); // do not strip password here; getPublicProfile will remove it
     if (user) {
       return done(null, user);
     }
@@ -40,6 +40,11 @@ passport.use(new GoogleStrategy({
     let user = await User.findOne({ googleId: profile.id });
     
     if (user) {
+      // Sync avatar and ensure email is verified on return
+      let changed = false;
+      if (avatar && user.avatar !== avatar) { user.avatar = avatar; changed = true; }
+      if (!user.isEmailVerified) { user.isEmailVerified = true; changed = true; }
+      if (changed) await user.save();
       return done(null, user, { status: 'returning' });
     }
 

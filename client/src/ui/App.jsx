@@ -316,6 +316,7 @@ import "./styles.css"; // ✅ import theme styles once globally
 import useApi from '../api/useApi'
 import OAuthCallback from './pages/OAuthCallback.jsx'
 import VerifyEmail from './pages/VerifyEmail.jsx'
+import ProfileModal from '../components/ProfileModal.jsx'
 
 function AppContent() {
   const [docs, setDocs] = useState([]);
@@ -326,6 +327,8 @@ function AppContent() {
   const isVerifyEmail = location.pathname.startsWith('/verify-email');
   const { user, loading, isGuestMode, exitGuestMode } = useAuth();
   const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   // Redirect first open to Home
   useEffect(() => {
@@ -530,22 +533,26 @@ function AppContent() {
               marginLeft: "16px",
             }}
           >
-            <div
-              style={{
-                width: "32px",
-                height: "32px",
-                borderRadius: "50%",
-                background: isGuestMode ? "#ffa500" : "var(--accent)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#0a0f25",
-                fontWeight: "bold",
-                fontSize: "14px",
-              }}
-            >
-              {isGuestMode ? "G" : user?.name?.charAt(0)?.toUpperCase() || "U"}
-            </div>
+            {(!isGuestMode && user?.avatar && !avatarError) ? (
+              <img src={user.avatar} alt="avatar" onError={()=>setAvatarError(true)} style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover', border:'2px solid #1f2b57' }} />
+            ) : (
+              <div
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  background: isGuestMode ? "#ffa500" : "var(--accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#0a0f25",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                }}
+              >
+                {isGuestMode ? "G" : user?.name?.charAt(0)?.toUpperCase() || "U"}
+              </div>
+            )}
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>
                 {isGuestMode ? "Guest User" : user?.name || "User"}
@@ -573,6 +580,21 @@ function AppContent() {
                   Sign Up
                 </button>
               )}
+              {!isGuestMode && (
+                <button
+                  onClick={() => setProfileOpen(true)}
+                  style={{
+                    background: "none",
+                    border: "1px solid #1f2b57",
+                    color: "var(--muted)",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                  }}
+                >
+                  Profile
+                </button>
+              )}
               <button
                 onClick={() => {
                   localStorage.removeItem("token");
@@ -594,6 +616,7 @@ function AppContent() {
           </div>
         </div>
       </div>
+  {profileOpen && <ProfileModal open={profileOpen} onClose={()=>setProfileOpen(false)} />}
 
       {/* 🔹 Main Content */}
       <div className="content" style={{ height: "calc(100vh - 60px)" }}>

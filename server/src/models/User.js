@@ -144,6 +144,8 @@ userSchema.methods.getPublicProfile = function() {
   delete userObject.emailVerificationExpires;
   delete userObject.resetPasswordToken;
   delete userObject.resetPasswordExpires;
+  // Add derived flags for client UX
+  userObject.hasPassword = !!this.password;
   return userObject;
 };
 
