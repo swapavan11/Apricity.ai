@@ -2,27 +2,36 @@ import express from 'express';
 import Document from '../models/Document.js';
 import Chat from '../models/Chat.js';
 import { generateText, embedTexts } from '../lib/gemini.js';
+import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // --- Chat management routes ---
-router.get('/chats', async (req, res) => {
+// Chats are per-user. Require authentication and scope by userId.
+router.get('/chats', authenticateToken, async (req, res) => {
   const { documentId } = req.query;
-  const q = documentId ? { documentId } : {};
+  const q = { userId: req.user._id };
+  if (documentId) q.documentId = documentId;
   const chats = await Chat.find(q).select('title documentId updatedAt createdAt').sort({ updatedAt: -1 });
   res.json({ chats });
 });
 
-router.get('/chats/:id', async (req, res) => {
+router.get('/chats/:id', authenticateToken, async (req, res) => {
   const chat = await Chat.findById(req.params.id);
   if (!chat) return res.status(404).json({ error: 'Chat not found' });
+  if (chat.userId.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied' });
   res.json(chat);
 });
 
-router.post('/chats', async (req, res) => {
+router.post('/chats', authenticateToken, async (req, res) => {
   const { documentId, title } = req.body;
-  const doc = documentId ? await Document.findById(documentId) : null;
-  const chat = await Chat.create({ documentId: documentId || null, title: title || doc?.title || 'New Chat', messages: [] });
+  // Verify document ownership if provided
+  if (documentId) {
+    const doc = await Document.findById(documentId);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    if (doc.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
+  }
+  const chat = await Chat.create({ documentId: documentId || null, title: title || 'New Chat', messages: [], userId: req.user._id });
   res.json({ id: chat._id, title: chat.title, documentId: chat.documentId });
 });
 
@@ -63,11 +72,23 @@ function lexicalScore(a, b) {
   return Math.max(wordScore, substringScore)
 }
 
-router.post('/ask', async (req, res) => {
+// Ask endpoint: require authentication to use user-owned documents and persist chats
+router.post('/ask', authenticateToken, async (req, res) => {
   const { query, documentId, allowGeneral = true, chatId, createIfMissing } = req.body;
   if (!query) return res.status(400).json({ error: 'query required' });
-
-  const docs = documentId ? await Document.find({ _id: documentId }) : await Document.find({});
+  // Only search documents belonging to the requesting user unless a specific
+  // documentId is provided; even then ensure ownership.
+  let docs = [];
+  if (documentId) {
+    const d = await Document.findById(documentId);
+    if (!d) return res.json({ answer: "No documents found. Please upload a PDF first.", citations: [], usedGeneral: true });
+    if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Access denied to document' });
+    }
+    docs = [d];
+  } else {
+    docs = await Document.find({ uploadedBy: req.user._id });
+  }
   if (!docs.length) {
     return res.json({ answer: "No documents found. Please upload a PDF first.", citations: [], usedGeneral: true });
   }

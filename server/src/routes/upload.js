@@ -45,13 +45,15 @@ router.get('/', async (req, res) => {
   try {
     // Check if user is authenticated
     const authHeader = req.headers['authorization'];
+    console.log('GET /api/upload - Authorization header present?', !!authHeader);
     const token = authHeader && authHeader.split(' ')[1];
     let user = null;
     
     if (token) {
       try {
         const decoded = jwt.verify(token, config.JWT_SECRET);
-        user = await User.findById(decoded.id).select('-password');
+        user = await User.findById(decoded.userId).select('-password');
+        console.log('GET /api/upload - token decoded user id:', decoded.userId);
       } catch (error) {
         console.warn('Invalid token, proceeding as guest:', error.message);
       }
@@ -67,7 +69,7 @@ router.get('/', async (req, res) => {
     }
 
     const docs = await Document.find({ uploadedBy: user._id })
-      .select('title filename pages createdAt chunks cloudinaryUrl')
+      .select('title filename pages createdAt chunks cloudinaryUrl cloudinaryPublicId')
       .sort({ createdAt: -1 });
     
     res.json({
@@ -115,16 +117,20 @@ router.post('/', upload.single('pdf'), async (req, res) => {
 
     // Check if user is authenticated
     const authHeader = req.headers['authorization'];
+    console.log('POST /api/upload - Authorization header present?', !!authHeader);
     const token = authHeader && authHeader.split(' ')[1];
     let user = null;
     
     if (token) {
       try {
         const decoded = jwt.verify(token, config.JWT_SECRET);
-        user = await User.findById(decoded.id).select('-password');
+        user = await User.findById(decoded.userId).select('-password');
+        console.log('POST /api/upload - token decoded user id:', decoded.userId);
       } catch (error) {
         console.warn('Invalid token, proceeding as guest:', error.message);
       }
+    } else {
+      console.log('POST /api/upload - no token provided in request');
     }
 
     // For guest users, store locally only (no Cloudinary)
@@ -132,22 +138,23 @@ router.post('/', upload.single('pdf'), async (req, res) => {
     let cloudinaryPublicId = null;
     
     if (user) {
-      // Upload to Cloudinary for authenticated users
-      const cloudinaryResult = await uploadPDF(req.file.path, {
-        public_id: `pdf_${user._id}_${Date.now()}`
-      });
-
-      if (!cloudinaryResult.success) {
-        console.error('Cloudinary upload failed:', cloudinaryResult.error);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to upload PDF to cloud storage',
-          error: cloudinaryResult.error
+      // Attempt Cloudinary upload for authenticated users. If Cloudinary fails
+      // we still persist the Document with the local storagePath so the user
+      // can see their upload in the selector and retry later.
+      try {
+        const cloudinaryResult = await uploadPDF(req.file.path, {
+          public_id: `pdf_${user._id}_${Date.now()}`
         });
+
+        if (cloudinaryResult && cloudinaryResult.success) {
+          cloudinaryUrl = cloudinaryResult.url;
+          cloudinaryPublicId = cloudinaryResult.publicId;
+        } else {
+          console.warn('Cloudinary upload returned non-success, continuing with local storage', cloudinaryResult && cloudinaryResult.error);
+        }
+      } catch (e) {
+        console.warn('Cloudinary upload threw error, continuing with local storage:', e && e.message);
       }
-      
-      cloudinaryUrl = cloudinaryResult.url;
-      cloudinaryPublicId = cloudinaryResult.publicId;
     }
 
     // Process chunks
@@ -171,32 +178,71 @@ router.post('/', upload.single('pdf'), async (req, res) => {
     // to avoid requiring uploadedBy and leaking guest data.
     let doc = null;
     if (user) {
-      doc = await Document.create({
-        title: req.body.title || req.file.originalname,
-        filename: req.file.filename,
-        mimeType: req.file.mimetype,
-        size: req.file.size,
-        pages,
-        storagePath: req.file.path, // Keep local copy
-        cloudinaryUrl: cloudinaryUrl,
-        cloudinaryPublicId: cloudinaryPublicId,
-        uploadedBy: user._id,
-        tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
-        description: req.body.description || '',
-        chunks,
-      });
+      try {
+        doc = await Document.create({
+          title: req.body.title || req.file.originalname,
+          filename: req.file.filename,
+          mimeType: req.file.mimetype,
+          size: req.file.size,
+          pages,
+          storagePath: req.file.path, // Keep local copy
+          cloudinaryUrl: cloudinaryUrl,
+          cloudinaryPublicId: cloudinaryPublicId,
+          uploadedBy: user._id,
+          tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
+          description: req.body.description || '',
+          chunks,
+        });
 
-      // Update user's documents array
-      await user.updateOne({ $push: { documents: doc._id } });
+        // Update user's documents array
+        const updateResult = await user.updateOne({ $push: { documents: doc._id } });
+        console.log('User updateOne result:', updateResult);
 
-      console.log('Document created:', {
-        id: doc._id,
-        title: doc.title,
-        pages: doc.pages,
-        chunksCount: doc.chunks.length,
-        cloudinaryUrl: cloudinaryUrl,
-        isGuest: false
-      });
+        // Double-check the document was saved by reloading it
+        const savedDoc = await Document.findById(doc._id).select('title pages cloudinaryUrl cloudinaryPublicId uploadedBy');
+        console.log('Document saved check:', savedDoc ? { id: savedDoc._id, title: savedDoc.title, uploadedBy: savedDoc.uploadedBy } : 'not found');
+
+        console.log('Document created:', {
+          id: doc._id,
+          title: doc.title,
+          pages: doc.pages,
+          chunksCount: (doc.chunks || []).length,
+          cloudinaryUrl: cloudinaryUrl || null,
+          isGuest: false
+        });
+      } catch (createErr) {
+        console.error('Document.create failed with full payload, attempting minimal create. Error:', createErr && createErr.message);
+        // Try a minimal create without heavy chunks to ensure persistence
+        try {
+          const minimal = {
+            title: req.body.title || req.file.originalname,
+            filename: req.file.filename,
+            mimeType: req.file.mimetype,
+            size: req.file.size,
+            pages,
+            storagePath: req.file.path,
+            cloudinaryUrl: cloudinaryUrl || null,
+            cloudinaryPublicId: cloudinaryPublicId || null,
+            uploadedBy: user._id,
+            tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
+            description: req.body.description || ''
+          };
+          doc = await Document.create(minimal);
+          const updateResult2 = await user.updateOne({ $push: { documents: doc._id } });
+          console.log('User updateOne result (minimal):', updateResult2);
+          const savedDoc2 = await Document.findById(doc._id).select('title pages cloudinaryUrl uploadedBy');
+          console.log('Document saved check (minimal):', savedDoc2 ? { id: savedDoc2._id, title: savedDoc2.title, uploadedBy: savedDoc2.uploadedBy } : 'not found');
+          console.log('Document created with minimal payload:', { id: doc._id, title: doc.title, pages: doc.pages });
+        } catch (minimalErr) {
+          console.error('Minimal Document.create also failed:', minimalErr && minimalErr.message);
+          // If we cannot create a DB record, continue but notify client of failure
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to persist uploaded document',
+            error: minimalErr && minimalErr.message
+          });
+        }
+      }
     } else {
       console.log('Guest upload processed (not persisted):', {
         filename: req.file.filename,
@@ -215,16 +261,21 @@ router.post('/', upload.single('pdf'), async (req, res) => {
     }
 
     const responseDocument = doc ? {
-      id: doc._id,
+      _id: doc._id,
+      id: doc._id.toString(),
       pages: doc.pages,
       title: doc.title,
-      cloudinaryUrl: cloudinaryUrl,
+      filename: doc.filename,
+      storagePath: doc.storagePath,
+      cloudinaryUrl: cloudinaryUrl || null,
+      cloudinaryPublicId: cloudinaryPublicId || null,
       isGuest: false
     } : {
+      _id: null,
       id: null,
       pages,
       title: req.body.title || req.file.originalname,
-      cloudinaryUrl: cloudinaryUrl,
+      cloudinaryUrl: cloudinaryUrl || null,
       isGuest: true
     };
     // Provide a local URL for immediate viewing (guest uploads or when Cloudinary not used)
@@ -315,7 +366,7 @@ router.get('/:id/file', async (req, res) => {
     if (token) {
       try {
         const decoded = jwt.verify(token, config.JWT_SECRET);
-        decodedUserId = decoded.id;
+        decodedUserId = decoded.userId;
       } catch (e) {
         // invalid token - ignore and treat as unauthenticated
         decodedUserId = null;

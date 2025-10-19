@@ -313,6 +313,7 @@ import Study from "../components/Study/Study.jsx"; // ✅ updated import (from c
 import Dashboard from "./pages/Dashboard.jsx";
 import Auth from "./pages/Auth.jsx";
 import "./styles.css"; // ✅ import theme styles once globally
+import useApi from '../api/useApi'
 
 function AppContent() {
   const [docs, setDocs] = useState([]);
@@ -337,26 +338,12 @@ function AppContent() {
     }
   }, []);
 
-  // API helper for document management
-  const api = {
-    listDocs: async () => {
-      const res = await fetch(`/api/upload`);
-      const data = await res.json();
-      return data.success ? data.documents : [];
-    },
-    uploadPdf: async (file, title) => {
-      const fd = new FormData();
-      fd.append("pdf", file);
-      if (title) fd.append("title", title);
-      const res = await fetch(`/api/upload`, { method: "POST", body: fd });
-      return res.json();
-    },
-  };
+  const api = useApi()
 
   // Load uploaded PDFs
   useEffect(() => {
     if ((user || isGuestMode) && !loading) {
-      api.listDocs().then(setDocs);
+      api.getDocs().then(setDocs).catch((e)=>{ console.error('Failed to load docs', e); setDocs([]); });
     }
   }, [user, loading, isGuestMode]);
 
@@ -380,9 +367,10 @@ function AppContent() {
         setDocs(prev => [tempDoc, ...(prev || [])]);
         setSelected(tempId);
       } else {
-        const all = await api.listDocs();
-        setDocs(all);
-        setSelected(res.document.id);
+  const all = await api.getDocs();
+  setDocs(all || []);
+        // Prefer _id if provided by server
+        setSelected(res.document && (res.document._id || res.document.id));
       }
     }
   };

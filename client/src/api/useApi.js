@@ -4,12 +4,29 @@ export default function useApi() {
   const base = "";
 
   return useMemo(() => ({
-    listDocs: async () => (await fetch(`${base}/api/upload`)).json(),
+    listDocs: async () => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/upload`, { headers });
+      return res.json();
+    },
+    // Convenience helper: returns array of documents (or empty array)
+    getDocs: async () => {
+      const resp = await (async () => {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${base}/api/upload`, { headers });
+        return res.json();
+      })();
+      return (resp && resp.documents) ? resp.documents : [];
+    },
     uploadPdf: async (file, title) => {
       const fd = new FormData();
       fd.append("pdf", file);
       if (title) fd.append("title", title);
-      const res = await fetch(`${base}/api/upload`, { method: "POST", body: fd });
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/upload`, { method: "POST", body: fd, headers });
       return res.json();
     },
     docFileUrl: (id, token) => {
@@ -21,7 +38,12 @@ export default function useApi() {
       if (!doc) return null;
       if (doc.cloudinaryUrl) return doc.cloudinaryUrl;
       if (doc.localUrl) return doc.localUrl;
-      if (doc._id || doc.id) return `${base}/api/upload/${doc._id || doc.id}/file`;
+      if (doc._id || doc.id) {
+        const id = doc._id || doc.id;
+        const token = localStorage.getItem('token');
+        const url = `${base}/api/upload/${id}/file`;
+        return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+      }
       return null;
     },
 

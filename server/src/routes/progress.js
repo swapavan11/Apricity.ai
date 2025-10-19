@@ -2,18 +2,19 @@ import express from 'express';
 import Document from '../models/Document.js';
 import { analyzePerformanceFast, calculateTrends } from '../lib/analytics.js';
 import { getCache, setCache, invalidateCache } from '../lib/cache.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+// Return progress summary for the authenticated user's documents only
+router.get('/', authenticateToken, async (req, res) => {
   try {
     // Check cache first
     const cachedData = getCache();
     if (cachedData) {
       return res.json(cachedData);
     }
-
-    const docs = await Document.find({}).select('title attempts createdAt');
+    const docs = await Document.find({ uploadedBy: req.user._id }).select('title attempts createdAt');
     const summary = docs.map(d => {
       const totalAttempts = d.attempts.length;
       const totalQuestions = d.attempts.reduce((s, a) => s + (a.total || 0), 0);
@@ -73,14 +74,16 @@ router.get('/', async (req, res) => {
 });
 
 // Get detailed attempt history for a specific document
-router.get('/attempts/:documentId', async (req, res) => {
+router.get('/attempts/:documentId', authenticateToken, async (req, res) => {
   try {
     const { documentId } = req.params;
-    const doc = await Document.findById(documentId).select('title attempts createdAt');
+    const doc = await Document.findById(documentId).select('title attempts createdAt uploadedBy');
     
     if (!doc) {
       return res.status(404).json({ error: 'Document not found' });
     }
+
+    if (doc.uploadedBy && doc.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
 
     // Sort attempts by creation date (newest first)
     const sortedAttempts = doc.attempts

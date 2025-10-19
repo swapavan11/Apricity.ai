@@ -94,7 +94,7 @@ async function withRetry(fn, { attempts = 3, baseDelayMs = 500 }) {
 }
 
 export async function generateText({ prompt, system, model = "gemini-2.5-flash", temperature = 0.2 }) {
-  const modelsToTry = [model, "gemini-1.5-flash-latest", "gemini-1.5-flash"];
+  const modelsToTry = [model, "gemini-2.5-flash-latest", "gemini-2.5-flash"];
   for (const mName of modelsToTry) {
     try {
       const m = getGemini(mName);

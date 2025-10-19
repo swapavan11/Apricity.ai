@@ -30,11 +30,15 @@ function parseJsonArray(text) {
 }
 
 // GET /api/quiz/topics?documentId=<id>
-router.get('/topics', async (req, res) => {
+// Require authentication and ensure document belongs to user
+import { authenticateToken } from '../middleware/auth.js';
+
+router.get('/topics', authenticateToken, async (req, res) => {
   const { documentId } = req.query;
   if (!documentId) return res.status(400).json({ error: 'documentId required' });
   const doc = await Document.findById(documentId);
   if (!doc) return res.status(404).json({ error: 'Document not found' });
+  if (doc.uploadedBy && doc.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
 
   const context = doc.chunks.slice(0, 60).map(c => `p.${c.page}: ${c.text.slice(0, 400)}`).join('\n');
   const system = 'You are an assistant that extracts a concise list of section/topic headings from a textbook. Output a JSON array of short topic strings.';
@@ -53,9 +57,17 @@ router.get('/topics', async (req, res) => {
   }
 });
 
-router.post('/generate', async (req, res) => {
+router.post('/generate', authenticateToken, async (req, res) => {
   const { documentId, mcqCount = 5, onewordCount = 0, saqCount = 0, laqCount = 0, instructions = '', topic = '' } = req.body;
-  const docs = documentId ? await Document.find({ _id: documentId }) : await Document.find({});
+  let docs = [];
+  if (documentId) {
+    const d = await Document.findById(documentId);
+    if (!d) return res.status(404).json({ error: 'Document not found' });
+    if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
+    docs = [d];
+  } else {
+    docs = await Document.find({ uploadedBy: req.user._id });
+  }
   if (!docs.length) return res.status(404).json({ error: 'No documents found' });
   // estimate pages available
   const totalPages = docs.reduce((s, d) => s + (d.pages || 0), 0) || 1;
@@ -124,7 +136,7 @@ Schema: {"questions":[{"id":"string","type":"MCQ|SAQ|LAQ","question":"string","o
   res.json(parsed);
 });
 
-router.post('/score', async (req, res) => {
+router.post('/score', authenticateToken, async (req, res) => {
   const { documentId, answers, questions } = req.body;
   if (!Array.isArray(answers) || !Array.isArray(questions)) return res.status(400).json({ error: 'Invalid payload' });
   
@@ -396,8 +408,11 @@ router.post('/score', async (req, res) => {
   };
   
   if (documentId) {
+    const d = await Document.findById(documentId);
+    if (!d) return res.status(404).json({ error: 'Document not found' });
+    if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
     await Document.findByIdAndUpdate(documentId, { $push: { attempts: attemptData } });
-    
+
     // Invalidate dashboard cache to ensure fresh data
     invalidateCache();
   }
