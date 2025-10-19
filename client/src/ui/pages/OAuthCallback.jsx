@@ -26,7 +26,7 @@ const OAuthCallback = () => {
 
       const result = await completeOAuthLogin(token);
       if (result.success) {
-        navigate('/');
+        navigate('/study');
       } else {
         setError(result.message || 'OAuth login failed');
         setTimeout(() => navigate('/auth?mode=auth'), 1500);

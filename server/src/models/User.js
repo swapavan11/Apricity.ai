@@ -5,7 +5,8 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: function() {
-      return !(this.mobileOnlyAuth || this.googleId);
+      // Email is required unless user is authenticated via Google OAuth
+      return !this.googleId;
     },
     unique: true,
     sparse: true,
@@ -21,19 +22,14 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: function() {
-      // Required only if not using Google OAuth or mobile-only auth
-      return !(this.googleId || this.mobileOnlyAuth);
+      // Required only if not using Google OAuth
+      return !this.googleId;
     }
   },
   googleId: {
     type: String,
     unique: true,
     sparse: true
-  },
-  // Flag for accounts created with mobile OTP (no email/password required)
-  mobileOnlyAuth: {
-    type: Boolean,
-    default: false
   },
   name: {
     type: String,
@@ -54,8 +50,6 @@ const userSchema = new mongoose.Schema({
   },
   emailVerificationToken: String,
   emailVerificationExpires: Date,
-  mobileVerificationOTP: String,
-  mobileVerificationExpires: Date,
   resetPasswordToken: String,
   resetPasswordExpires: Date,
   lastLogin: {
@@ -125,12 +119,7 @@ userSchema.methods.generateEmailVerificationToken = function() {
 };
 
 // Generate mobile OTP
-userSchema.methods.generateMobileOTP = function() {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
-  this.mobileVerificationOTP = otp;
-  this.mobileVerificationExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-  return otp;
-};
+// Removed mobile OTP generation
 
 // Generate password reset token
 userSchema.methods.generatePasswordResetToken = function() {
@@ -153,8 +142,6 @@ userSchema.methods.getPublicProfile = function() {
   delete userObject.password;
   delete userObject.emailVerificationToken;
   delete userObject.emailVerificationExpires;
-  delete userObject.mobileVerificationOTP;
-  delete userObject.mobileVerificationExpires;
   delete userObject.resetPasswordToken;
   delete userObject.resetPasswordExpires;
   return userObject;

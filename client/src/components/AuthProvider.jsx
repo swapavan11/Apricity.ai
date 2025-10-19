@@ -76,9 +76,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (identifierOrEmail, password) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
+      // Accept either email or mobile as 'identifier'
+      const payload = identifierOrEmail?.includes('@')
+        ? { email: identifierOrEmail, password }
+        : { identifier: identifierOrEmail, password };
+      const response = await axios.post('/api/auth/login', payload);
       const { token: newToken, user: userData } = response.data;
       
       setToken(newToken);
@@ -115,45 +119,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register with mobile only (no email/password) - server sends OTP
-  const registerMobile = async (name, mobile) => {
-    try {
-      const response = await axios.post('/api/auth/register-mobile', {
-        name,
-        mobile
-      });
-      return {
-        success: true,
-        message: response.data.message,
-        user: response.data.user
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Registration failed'
-      };
-    }
-  };
-
   const verifyEmail = async (token) => {
     try {
       const response = await axios.post('/api/auth/verify-email', { token });
-      return { 
-        success: true, 
-        message: response.data.message 
-      };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Email verification failed' 
-      };
-    }
-  };
-
-  const verifyMobile = async (mobile, otp) => {
-    try {
-      const response = await axios.post('/api/auth/verify-mobile', { mobile, otp });
-      // If server returns a token and user, log in immediately
       const newToken = response.data?.token;
       const userData = response.data?.user;
       if (newToken && userData) {
@@ -172,10 +140,12 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return { 
         success: false, 
-        message: error.response?.data?.message || 'Mobile verification failed' 
+        message: error.response?.data?.message || 'Email verification failed' 
       };
     }
   };
+
+  // Removed mobile verification
 
   const resendEmailVerification = async (email) => {
     try {
@@ -192,20 +162,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const resendMobileOTP = async (mobile) => {
-    try {
-      const response = await axios.post('/api/auth/resend-mobile-otp', { mobile });
-      return { 
-        success: true, 
-        message: response.data.message 
-      };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to resend OTP' 
-      };
-    }
-  };
+  // Removed mobile OTP resend
 
   const logout = () => {
     setUser(null);
@@ -253,11 +210,8 @@ export const AuthProvider = ({ children }) => {
     isGuestMode,
     login,
     register,
-  registerMobile,
     verifyEmail,
-    verifyMobile,
     resendEmailVerification,
-    resendMobileOTP,
     logout,
     updateProfile,
     enterGuestMode,

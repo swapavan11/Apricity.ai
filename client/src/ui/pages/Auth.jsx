@@ -17,6 +17,14 @@ const Auth = () => {
     }
   });
   const navigate = useNavigate();
+  const [banner, setBanner] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('message') || '';
+    } catch {
+      return '';
+    }
+  });
   const { user, loading, isGuestMode } = useAuth();
 
   // If URL has ?mode=auth, skip mode selection and show auth forms directly
@@ -26,6 +34,8 @@ const Auth = () => {
       if (params.get('mode') === 'auth') {
         setShowModeSelection(false);
       }
+      const msg = params.get('message');
+      if (msg) setBanner(msg);
     } catch (err) {
       // ignore
     }
@@ -37,10 +47,10 @@ const Auth = () => {
       const params = new URLSearchParams(window.location.search);
       if (params.get('mode') === 'auth') {
         const onPop = () => {
-          // Show mode selection UI
-          setShowModeSelection(true);
-          // Remove query param from URL for a cleaner state
-          try { window.history.replaceState({}, '', '/auth'); } catch (e) {}
+          // When coming from flows like verification, keep auth forms visible
+          setShowModeSelection(false);
+          // Keep mode=auth to preserve auth view
+          try { window.history.replaceState({}, '', '/auth?mode=auth'); } catch (e) {}
         };
         window.addEventListener('popstate', onPop);
         return () => window.removeEventListener('popstate', onPop);
@@ -143,6 +153,23 @@ const Auth = () => {
             textAlign: 'center',
             marginBottom: '2rem'
           }}>
+            {banner && (
+              <div style={{
+                background: '#0e1a45',
+                border: '1px solid #1f2b57',
+                color: 'var(--muted)',
+                padding: '10px 14px',
+                borderRadius: 8,
+                marginBottom: '1rem'
+              }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                  <span>{banner}</span>
+                  <button onClick={() => setBanner('')} style={{
+                    background:'none', border:'none', color:'var(--muted)', cursor:'pointer', padding:4
+                  }}>Dismiss</button>
+                </div>
+              </div>
+            )}
             <h1 style={{
               margin: '0 0 0.5rem 0',
               fontSize: '2.5rem',

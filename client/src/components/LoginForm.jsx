@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthProvider.jsx';
+import axios from 'axios';
 
 const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -10,6 +11,23 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const [redirecting, setRedirecting] = useState(false);
+  // Simplified login: accept email OR mobile number in the same field
+  const [useMobile, setUseMobile] = useState(false);
+  const [countryDial, setCountryDial] = useState('1');
+  const COUNTRY_OPTIONS = [
+    { code: 'US', dial: '1' }, { code: 'IN', dial: '91' }, { code: 'GB', dial: '44' }, { code: 'CA', dial: '1' }, { code: 'AU', dial: '61' }, { code: 'SG', dial: '65' }, { code: 'DE', dial: '49' }, { code: 'FR', dial: '33' }, { code: 'ZA', dial: '27' }, { code: 'BR', dial: '55' }
+  ];
+  const buildE164 = (dial, number) => {
+    const raw = (number || '').trim();
+    if (raw.startsWith('+')) {
+      const digits = raw.replace(/\D/g, '');
+      return digits ? `+${digits}` : '';
+    }
+    const digits = raw.replace(/\D/g, '');
+    const cc = String(dial || '').replace(/\D/g, '');
+    if (!digits) return '';
+    return `+${cc}${digits}`;
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -24,8 +42,10 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
     setLoading(true);
     setError('');
 
-    const result = await login(formData.email, formData.password);
-    
+    const identifier = useMobile
+      ? buildE164(countryDial, formData.email.trim())
+      : formData.email.trim();
+    const result = await login(identifier, formData.password);
     if (result.success) {
       onSuccess?.();
     } else {
@@ -75,8 +95,20 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
         </div>
       )}
 
+      {/* Identifier hint toggle */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button type="button" onClick={() => { setUseMobile(false); setError(''); }}
+          style={{ flex: 1, padding: 10, borderRadius: 8, border: !useMobile?'1px solid var(--accent)':'1px solid #1f2b57', background: !useMobile?'#13204a':'#0f1530', color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>
+          Use Email
+        </button>
+        <button type="button" onClick={() => { setUseMobile(true); setError(''); }}
+          style={{ flex: 1, padding: 10, borderRadius: 8, border: useMobile?'1px solid var(--accent)':'1px solid #1f2b57', background: useMobile?'#13204a':'#0f1530', color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>
+          Use Mobile
+        </button>
+      </div>
+
       <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '1rem' }}>
+         <div style={{ marginBottom: '1rem' }}>
           <label style={{
             display: 'block',
             marginBottom: '0.5rem',
@@ -84,10 +116,23 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
             fontSize: '0.9rem',
             fontWeight: '500'
           }}>
-            Email Address
+            {useMobile ? 'Mobile Number' : 'Email Address or Mobile'}
           </label>
+            {useMobile && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <select
+                  value={countryDial}
+                  onChange={(e) => setCountryDial(e.target.value)}
+                  style={{ padding: 12, background: '#0f1530', border: '1px solid #1f2b57', borderRadius: 8, color: 'var(--text)' }}
+                >
+                  {COUNTRY_OPTIONS.map(opt => (
+                    <option key={opt.code} value={opt.dial}>+{opt.dial} {opt.code}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           <input
-            type="email"
+            type="text"
             name="email"
             value={formData.email}
             onChange={handleChange}
@@ -101,9 +146,9 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
               color: 'var(--text)',
               fontSize: '0.9rem'
             }}
-            placeholder="Enter your email"
+            placeholder={useMobile ? 'Enter your mobile number' : 'Enter your email or mobile'}
           />
-        </div>
+  </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label style={{

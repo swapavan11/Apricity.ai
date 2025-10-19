@@ -12,16 +12,39 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const { register, registerMobile } = useAuth();
-  const { verifyMobile, resendMobileOTP } = useAuth();
+  const { register } = useAuth();
 
-  // registration method: 'email' -> email verification link | 'mobile' -> OTP flow
-  const [method, setMethod] = useState('email');
-  const [otpPhase, setOtpPhase] = useState(false);
-  const [otp, setOtp] = useState('');
+  // single registration flow (email/password); mobile is optional and stored as-is
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [countryDial, setCountryDial] = useState('1'); // default US
+  const [redirectingGoogle, setRedirectingGoogle] = useState(false);
 
-  // cooldown timer for resend OTP
+  const COUNTRY_OPTIONS = [
+    { code: 'US', dial: '1' },
+    { code: 'IN', dial: '91' },
+    { code: 'GB', dial: '44' },
+    { code: 'CA', dial: '1' },
+    { code: 'AU', dial: '61' },
+    { code: 'SG', dial: '65' },
+    { code: 'DE', dial: '49' },
+    { code: 'FR', dial: '33' },
+    { code: 'ZA', dial: '27' },
+    { code: 'BR', dial: '55' }
+  ];
+
+  const buildE164 = (dial, number) => {
+    const raw = (number || '').trim();
+    if (raw.startsWith('+')) {
+      const digits = raw.replace(/\D/g, '');
+      return digits ? `+${digits}` : '';
+    }
+    const digits = raw.replace(/\D/g, '');
+    const cc = String(dial || '').replace(/\D/g, '');
+    if (!digits) return '';
+    return `+${cc}${digits}`;
+  };
+
+  // cooldown timer (legacy, not used but kept if needed for future)
   useEffect(() => {
     if (!resendCooldown) return;
     const t = setInterval(() => setResendCooldown((x) => (x > 0 ? x - 1 : 0)), 1000);
@@ -38,27 +61,19 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
   };
 
   const validateForm = () => {
-    if (method === 'email' && formData.password !== formData.confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return false;
     }
-    if (method === 'email' && formData.password.length < 6) {
+    if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
       return false;
     }
-    // In mobile method, mobile is required and must be valid
+    // Mobile optional; if provided, allow + prefixed or digits
     const digits = (formData.mobile || '').replace(/\D/g, '');
-    if (method === 'mobile') {
-      if (!digits || digits.length !== 10) {
-        setError('Please enter a valid 10-digit mobile number');
-        return false;
-      }
-    } else {
-      // In email method, mobile is optional; if provided, validate format
-      if (formData.mobile && digits.length !== 10) {
-        setError('Please enter a valid 10-digit mobile number');
-        return false;
-      }
+    if (formData.mobile && digits.length < 7) {
+      setError('Please enter a valid mobile number');
+      return false;
     }
     return true;
   };
@@ -72,76 +87,27 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
     setError('');
     setSuccess('');
 
-    if (method === 'mobile') {
-      // Call mobile-only registration API
-      const result = await registerMobile(formData.name, formData.mobile);
-      if (result.success) {
-        setSuccess('We have sent a verification code to your mobile. Please enter it below.');
-        setOtpPhase(true);
-        setResendCooldown(30);
-      } else {
-        setError(result.message || 'Registration failed');
-      }
+    // Email/password route only; mobile optional
+    const mobileE164 = formData.mobile ? buildE164(countryDial, formData.mobile) : undefined;
+    const result = await register(
+      formData.name,
+      formData.email,
+      formData.password,
+      mobileE164
+    );
+    if (result.success) {
+      setSuccess(result.message || 'Registration successful. Please check your email for verification.');
+      // If backend resent verification for an already-registered but unverified user,
+      // do not auto-redirect; let the user read the message and act.
+      // Keep the success message visible and skip onSuccess redirect here.
     } else {
-      // Email/password route
-      const result = await register(
-        formData.name,
-        formData.email,
-        formData.password,
-        formData.mobile || undefined
-      );
-      if (result.success) {
-        setSuccess(result.message || 'Registration successful. Please check your email for verification.');
-        setTimeout(() => {
-          onSuccess?.();
-        }, 2000);
-      } else {
-        setError(result.message || 'Registration failed');
-      }
+      setError(result.message || 'Registration failed');
     }
     
     setLoading(false);
   };
 
-  const handleVerifyOtp = async (e) => {
-    e?.preventDefault?.();
-    setError('');
-    setSuccess('');
-    if (!formData.mobile) {
-      setError('Mobile number is missing');
-      return;
-    }
-    if (!otp || otp.trim().length < 4) {
-      setError('Please enter the OTP sent to your mobile');
-      return;
-    }
-
-    setLoading(true);
-    const digits = formData.mobile.replace(/\D/g, '');
-    const resp = await verifyMobile(digits, otp.trim());
-    if (resp.success) {
-      setSuccess('Mobile number verified successfully!');
-      setTimeout(() => {
-        onSuccess?.();
-      }, 1200);
-    } else {
-      setError(resp.message || 'Invalid or expired OTP');
-    }
-    setLoading(false);
-  };
-
-  const handleResendOtp = async () => {
-    if (resendCooldown || !formData.mobile) return;
-    setError('');
-    const digits = formData.mobile.replace(/\D/g, '');
-    const resp = await resendMobileOTP(digits);
-    if (!resp.success) {
-      setError(resp.message || 'Failed to resend OTP');
-    } else {
-      setSuccess('OTP sent again. Please check your messages.');
-      setResendCooldown(30);
-    }
-  };
+  // Removed OTP handlers
 
   return (
     <div style={{
@@ -169,41 +135,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
         </p>
       </div>
 
-      {/* Registration method toggle */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
-        <button
-          type="button"
-          onClick={() => { setMethod('email'); setOtpPhase(false); setError(''); setSuccess(''); }}
-          style={{
-            flex: 1,
-            padding: '10px',
-            borderRadius: '8px',
-            border: method === 'email' ? '1px solid var(--accent)' : '1px solid #1f2b57',
-            background: method === 'email' ? '#13204a' : '#0f1530',
-            color: 'var(--text)',
-            cursor: 'pointer',
-            fontWeight: 600
-          }}
-        >
-          Email & Password
-        </button>
-        <button
-          type="button"
-          onClick={() => { setMethod('mobile'); setOtpPhase(false); setError(''); setSuccess(''); }}
-          style={{
-            flex: 1,
-            padding: '10px',
-            borderRadius: '8px',
-            border: method === 'mobile' ? '1px solid var(--accent)' : '1px solid #1f2b57',
-            background: method === 'mobile' ? '#13204a' : '#0f1530',
-            color: 'var(--text)',
-            cursor: 'pointer',
-            fontWeight: 600
-          }}
-        >
-          Mobile OTP
-        </button>
-      </div>
+      {/* Single registration flow (email/password); mobile optional */}
 
       {error && (
         <div style={{
@@ -233,8 +165,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
         </div>
       )}
 
-      {/* Initial registration form */}
-      {!otpPhase && (
+  {/* Registration form */}
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '1rem' }}>
           <label style={{
@@ -265,8 +196,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
           />
         </div>
 
-        {/* Email (Email method only) */}
-        {method === 'email' && (
+  {/* Email */}
         <div style={{ marginBottom: '1rem' }}>
           <label style={{
             display: 'block',
@@ -295,7 +225,6 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             placeholder="Enter your email"
           />
         </div>
-        )}
         {/* Mobile, optional in email method, required in mobile method */}
         <div style={{ marginBottom: '1rem' }}>
           <label style={{
@@ -305,29 +234,39 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             fontSize: '0.9rem',
             fontWeight: '500'
           }}>
-            Mobile Number {method === 'mobile' ? '*' : '(Optional)'}
+            Mobile Number (Optional)
           </label>
-          <input
-            type="tel"
-            name="mobile"
-            value={formData.mobile}
-            onChange={handleChange}
-            required={method === 'mobile'}
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: '#0f1530',
-              border: '1px solid #1f2b57',
-              borderRadius: '8px',
-              color: 'var(--text)',
-              fontSize: '0.9rem'
-            }}
-            placeholder="Enter your mobile number"
-          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select
+              value={countryDial}
+              onChange={(e) => setCountryDial(e.target.value)}
+              style={{ padding: '12px', background: '#0f1530', border: '1px solid #1f2b57', borderRadius: '8px', color: 'var(--text)' }}
+            >
+              {COUNTRY_OPTIONS.map(opt => (
+                <option key={opt.code} value={opt.dial}>+{opt.dial} {opt.code}</option>
+              ))}
+            </select>
+            <input
+              type="tel"
+              name="mobile"
+              value={formData.mobile}
+              onChange={handleChange}
+              required={false}
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: '#0f1530',
+                border: '1px solid #1f2b57',
+                borderRadius: '8px',
+                color: 'var(--text)',
+                fontSize: '0.9rem'
+              }}
+              placeholder="Enter your mobile number"
+            />
+          </div>
         </div>
 
-        {/* Passwords (Email method only) */}
-        {method === 'email' && (
+  {/* Password */}
         <div style={{ marginBottom: '1rem' }}>
           <label style={{
             display: 'block',
@@ -355,10 +294,9 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             }}
             placeholder="Create a password"
           />
-        </div>
-        )}
+  </div>
 
-        {method === 'email' && (
+  {/* Confirm Password */}
         <div style={{ marginBottom: '1.5rem' }}>
           <label style={{
             display: 'block',
@@ -386,8 +324,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             }}
             placeholder="Confirm your password"
           />
-        </div>
-        )}
+  </div>
 
         <button
           type="submit"
@@ -405,84 +342,10 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             transition: 'all 0.2s ease'
           }}
         >
-          {loading ? 'Creating Account...' : (method === 'mobile' ? 'Create & Send OTP' : 'Create Account')}
+          {loading ? 'Creating Account...' : 'Create Account'}
         </button>
       </form>
-      )}
-
-      {/* OTP verification phase */}
-      {otpPhase && (
-        <form onSubmit={handleVerifyOtp} style={{ marginTop: '1rem' }}>
-          <div style={{
-            padding: '12px',
-            background: '#0f1530',
-            border: '1px solid #1f2b57',
-            borderRadius: '8px',
-            color: 'var(--muted)',
-            marginBottom: '1rem',
-            fontSize: '0.9rem'
-          }}>
-            Enter the 6-digit code sent to {formData.mobile}
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '1rem' }}>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-              maxLength={6}
-              style={{
-                flex: 1,
-                padding: '12px',
-                background: '#0f1530',
-                border: '1px solid #1f2b57',
-                borderRadius: '8px',
-                color: 'var(--text)',
-                fontSize: '1rem',
-                letterSpacing: '0.25em',
-                textAlign: 'center'
-              }}
-              placeholder="______"
-            />
-            <button
-              type="button"
-              disabled={!!resendCooldown || loading}
-              onClick={handleResendOtp}
-              style={{
-                whiteSpace: 'nowrap',
-                background: 'none',
-                border: '1px solid #1f2b57',
-                color: 'var(--accent)',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                cursor: resendCooldown ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {resendCooldown ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
-            </button>
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: loading ? '#1f2b57' : 'var(--accent)',
-              color: loading ? 'var(--muted)' : '#0a0f25',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              fontWeight: '600',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            {loading ? 'Verifying…' : 'Verify OTP'}
-          </button>
-        </form>
-      )}
+      {/* Removed OTP verification phase */}
 
       <div style={{
         textAlign: 'center',
@@ -512,6 +375,35 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
         >
           Sign In
         </button>
+      </div>
+
+      {/* Continue with Google under create account */}
+      <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+        {(() => {
+          const origin = typeof window !== 'undefined' ? window.location.origin : '';
+          const isDev = origin.includes('localhost:5173');
+          const backendBase = isDev ? 'http://localhost:5000' : '';
+          const googleUrl = `${backendBase}/api/auth/google`;
+          return (
+            <a
+              href={googleUrl}
+              onClick={() => setRedirectingGoogle(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: '#0f1530', border: '1px solid #1f2b57', color: 'var(--text)',
+                padding: '10px 16px', borderRadius: 8, textDecoration: 'none', fontSize: '0.9rem'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Continue with Google
+            </a>
+          );
+        })()}
       </div>
     </div>
   );

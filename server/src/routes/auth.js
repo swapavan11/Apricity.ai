@@ -3,7 +3,6 @@ import passport from 'passport';
 import User from '../models/User.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
 import { sendEmailVerification, sendPasswordReset, sendWelcomeEmail } from '../lib/email.js';
-import { sendOTP, sendWelcomeSMS, validateMobileNumber } from '../lib/sms.js';
 import { config } from '../lib/config.js';
 
 const router = express.Router();
@@ -21,16 +20,40 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [{ email }, ...(mobile ? [{ mobile }] : [])]
-    });
-
-    if (existingUser) {
+    // Check if email is already registered
+    const existingByEmail = await User.findOne({ email });
+    if (existingByEmail) {
+      // If email exists but not verified, resend verification instead of blocking
+      if (!existingByEmail.isEmailVerified) {
+        const emailToken = existingByEmail.generateEmailVerificationToken();
+        await existingByEmail.save();
+        try {
+          await sendEmailVerification(existingByEmail.email, existingByEmail.name, emailToken);
+        } catch (e) {
+          console.error('Resend verification on re-register failed:', e);
+        }
+        return res.status(200).json({
+          success: true,
+          message: 'This email is already registered but not verified. We have resent the verification email. Please check your inbox (and spam) to complete verification.',
+          user: existingByEmail.getPublicProfile()
+        });
+      }
+      // Email is verified; instruct user to sign in
       return res.status(409).json({
         success: false,
-        message: existingUser.email === email ? 'Email already registered' : 'Mobile number already registered'
+        message: 'Email already registered. Please sign in.'
       });
+    }
+
+    // If email is clear, ensure mobile (if provided) is not already in use
+    if (mobile) {
+      const existingByMobile = await User.findOne({ mobile: String(mobile).trim() });
+      if (existingByMobile) {
+        return res.status(409).json({
+          success: false,
+          message: 'Mobile number already registered'
+        });
+      }
     }
 
     // Create user
@@ -38,12 +61,11 @@ router.post('/register', async (req, res) => {
       name,
       email,
       password,
-      ...(mobile && { mobile })
+      ...(mobile && { mobile: String(mobile).trim() })
     });
 
-    // Generate email verification token
-    const emailToken = user.generateEmailVerificationToken();
-    await user.save();
+  // Generate email verification token
+  const emailToken = user.generateEmailVerificationToken();
 
     // Send verification email
     const emailResult = await sendEmailVerification(email, name, emailToken);
@@ -51,19 +73,8 @@ router.post('/register', async (req, res) => {
       console.error('Failed to send verification email:', emailResult.error);
     }
 
-    // Send mobile OTP if mobile provided
-    if (mobile) {
-      const mobileValidation = validateMobileNumber(mobile);
-      if (mobileValidation.valid) {
-        const otp = user.generateMobileOTP();
-        await user.save();
-        
-  const smsResult = await sendOTP(mobileValidation.formatted, otp, user.name);
-        if (!smsResult.success) {
-          console.error('Failed to send SMS OTP:', smsResult.error);
-        }
-      }
-    }
+    // Save user
+    await user.save();
 
     res.status(201).json({
       success: true,
@@ -80,85 +91,38 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Register with mobile-only (OTP-based, no email/password)
-router.post('/register-mobile', async (req, res) => {
-  try {
-    const { name, mobile } = req.body;
-
-    if (!name || !mobile) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name and mobile are required'
-      });
-    }
-
-    // Validate mobile format
-    const mobileValidation = validateMobileNumber(mobile);
-    if (!mobileValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid mobile number format'
-      });
-    }
-
-    // Check if mobile already exists
-    const existingMobile = await User.findOne({ mobile: mobileValidation.formatted });
-    if (existingMobile) {
-      return res.status(409).json({
-        success: false,
-        message: 'Mobile number already registered'
-      });
-    }
-
-    // Create mobile-only user (no email/password)
-    const user = new User({
-      name,
-      mobile: mobileValidation.formatted,
-      mobileOnlyAuth: true,
-      isEmailVerified: false,
-      isMobileVerified: false
-    });
-
-    // Generate OTP and save
-    const otp = user.generateMobileOTP();
-    await user.save();
-
-    // Send OTP
-  const smsResult = await sendOTP(mobileValidation.formatted, otp, user.name);
-    if (!smsResult.success) {
-      console.error('Failed to send SMS OTP:', smsResult.error);
-      // We still created the user; allow retry of resend from client
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: 'Account created. OTP sent to your mobile number.',
-      user: user.getPublicProfile()
-    });
-  } catch (error) {
-    console.error('Mobile-only registration error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Registration failed',
-      error: error.message
-    });
-  }
-});
+// Removed: mobile-only registration (OTP-based)
 
 // Login with email and password
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { identifier, email, mobile, password } = req.body;
 
-    if (!email || !password) {
+    if (!password) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: 'Password is required'
+      });
+    }
+
+    // Determine identifier: prefer explicit identifier, else email, else mobile
+    const loginId = identifier || email || mobile;
+    if (!loginId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email or mobile and password are required'
       });
     }
 
     // Find user
-    const user = await User.findOne({ email });
+    let user;
+    if (loginId.includes('@')) {
+      user = await User.findOne({ email: loginId });
+    } else {
+      const raw = String(loginId).trim();
+      // Expect exact E.164 match so country code must be correct
+      user = await User.findOne({ mobile: raw });
+    }
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -197,6 +161,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Removed: mobile OTP login
+
 // Verify email
 router.post('/verify-email', async (req, res) => {
   try {
@@ -219,12 +185,16 @@ router.post('/verify-email', async (req, res) => {
     user.emailVerificationExpires = undefined;
     await user.save();
 
-    // Send welcome email
-    await sendWelcomeEmail(user.email, user.name);
+    // Send welcome email (non-blocking)
+    try { await sendWelcomeEmail(user.email, user.name); } catch {}
 
+    // Auto-login by issuing JWT so client can redirect user to study space
+    const jwt = generateToken(user._id);
     res.json({
       success: true,
-      message: 'Email verified successfully'
+      message: 'Email verified successfully',
+      token: jwt,
+      user: user.getPublicProfile()
     });
   } catch (error) {
     console.error('Email verification error:', error);
@@ -237,51 +207,7 @@ router.post('/verify-email', async (req, res) => {
 });
 
 // Verify mobile OTP
-router.post('/verify-mobile', async (req, res) => {
-  try {
-    const { mobile, otp } = req.body;
-
-    const user = await User.findOne({
-      mobile,
-      mobileVerificationOTP: otp,
-      mobileVerificationExpires: { $gt: Date.now() }
-    });
-
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired OTP'
-      });
-    }
-
-    user.isMobileVerified = true;
-    user.mobileVerificationOTP = undefined;
-    user.mobileVerificationExpires = undefined;
-    await user.save();
-
-    // Send welcome SMS
-    const mobileValidation = validateMobileNumber(mobile);
-    if (mobileValidation.valid) {
-      await sendWelcomeSMS(mobileValidation.formatted, user.name);
-    }
-
-    // If verification succeeded, provide JWT so client is authenticated
-    const token = generateToken(user._id);
-    res.json({
-      success: true,
-      message: 'Mobile number verified successfully',
-      token,
-      user: user.getPublicProfile()
-    });
-  } catch (error) {
-    console.error('Mobile verification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Mobile verification failed',
-      error: error.message
-    });
-  }
-});
+// Removed: mobile OTP verification
 
 // Resend email verification
 router.post('/resend-email-verification', async (req, res) => {
@@ -330,58 +256,7 @@ router.post('/resend-email-verification', async (req, res) => {
 });
 
 // Resend mobile OTP
-router.post('/resend-mobile-otp', async (req, res) => {
-  try {
-    const { mobile } = req.body;
-
-    const user = await User.findOne({ mobile });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    if (user.isMobileVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Mobile number already verified'
-      });
-    }
-
-    const mobileValidation = validateMobileNumber(mobile);
-    if (!mobileValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid mobile number format'
-      });
-    }
-
-    const otp = user.generateMobileOTP();
-    await user.save();
-
-    const smsResult = await sendOTP(mobileValidation.formatted, otp);
-    if (!smsResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send OTP',
-        error: smsResult.error
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'OTP sent successfully'
-    });
-  } catch (error) {
-    console.error('Resend mobile OTP error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to resend OTP',
-      error: error.message
-    });
-  }
-});
+// Removed: resend mobile OTP
 
 // Get current user profile
 router.get('/profile', authenticateToken, async (req, res) => {

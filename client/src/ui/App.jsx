@@ -315,6 +315,7 @@ import Auth from "./pages/Auth.jsx";
 import "./styles.css"; // ✅ import theme styles once globally
 import useApi from '../api/useApi'
 import OAuthCallback from './pages/OAuthCallback.jsx'
+import VerifyEmail from './pages/VerifyEmail.jsx'
 
 function AppContent() {
   const [docs, setDocs] = useState([]);
@@ -322,6 +323,7 @@ function AppContent() {
   const location = useLocation();
   const isHomePage = location.pathname === "/";
   const isOAuthCallback = location.pathname.startsWith('/auth/callback');
+  const isVerifyEmail = location.pathname.startsWith('/verify-email');
   const { user, loading, isGuestMode, exitGuestMode } = useAuth();
   const navigate = useNavigate();
 
@@ -331,7 +333,10 @@ function AppContent() {
       const key = "quizhive_first_open_done";
       if (!sessionStorage.getItem(key)) {
         sessionStorage.setItem(key, "1");
-        if (location.pathname !== "/") {
+        const p = location.pathname || "/";
+        // Do NOT override auth-critical flows like verification or OAuth callback
+        const skip = p.startsWith("/verify-email") || p.startsWith("/auth");
+        if (!skip && p !== "/") {
           navigate("/");
         }
       }
@@ -413,6 +418,17 @@ function AppContent() {
       <div className="content" style={{ height: "100vh" }}>
         <Routes>
           <Route path="/auth/callback" element={<OAuthCallback />} />
+        </Routes>
+      </div>
+    );
+  }
+
+  // Email verification page must be accessible before auth state is set
+  if (isVerifyEmail) {
+    return (
+      <div className="content" style={{ height: "100vh" }}>
+        <Routes>
+          <Route path="/verify-email" element={<VerifyEmail />} />
         </Routes>
       </div>
     );
@@ -584,6 +600,7 @@ function AppContent() {
         <div key={location.key} style={{ height: "100%" }}>
           <Routes location={location}>
             <Route path="/" element={<Home />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/study" element={<Study selected={selected} docs={docs} />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/auth/callback" element={<OAuthCallback />} />
