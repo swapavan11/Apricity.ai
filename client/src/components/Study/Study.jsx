@@ -7,6 +7,7 @@ import QuizSection from "./QuizSection";
 import YouTubeSection from "./YouTubeSection";
 import HistorySection from "./HistorySection";
 import ChatHistorySlider from "./ChatHistorySlider";
+import NotebookModal from "./NotebookModal";
 
 export default function Study({ selected, docs }) {
   const api = useApi();
@@ -38,6 +39,7 @@ export default function Study({ selected, docs }) {
   // Attempt history
   const [attemptHistory, setAttemptHistory] = useState(null);
   const [loadingAttemptHistory, setLoadingAttemptHistory] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
 
   // Helper: refresh YouTube suggestions (used from UI)
   const refreshYouTubeRecommendations = async () => {
@@ -185,6 +187,9 @@ export default function Study({ selected, docs }) {
               <button className={activeTab === 'quiz' ? '' : 'secondary'} onClick={() => setActiveTab('quiz')}>Quiz</button>
               <button className={activeTab === 'youtube' ? '' : 'secondary'} onClick={() => setActiveTab('youtube')}>YouTube</button>
               <button className={activeTab === 'history' ? '' : 'secondary'} onClick={() => setActiveTab('history')}>Attempt History</button>
+              <button className="secondary" onClick={() => setNotebookOpen(true)} title="Open Notebook" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                📝 Notebook
+              </button>
             </div>
 
             <div className="row" style={{ gap: 8 }}>
@@ -265,6 +270,8 @@ export default function Study({ selected, docs }) {
         docs={docs}
         setActiveTab={setActiveTab}
       />
+
+      <NotebookModal open={notebookOpen} onClose={() => setNotebookOpen(false)} associatedDocId={selected === 'all' ? '' : selected} />
     </div>
   );
 }

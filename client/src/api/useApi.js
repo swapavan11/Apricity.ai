@@ -107,5 +107,40 @@ export default function useApi() {
       const res = await fetch(`${base}/api/progress/invalidate`, { method: "POST" });
       return res.json();
     },
+
+    // Notes autosave
+    saveNote: async ({ noteId, title, docId, noteJson, snapshotBlob }) => {
+      const fd = new FormData();
+      if (noteId) fd.append('noteId', noteId);
+      if (title) fd.append('title', title);
+      if (docId) fd.append('docId', docId);
+      if (noteJson) fd.append('noteJson', typeof noteJson === 'string' ? noteJson : JSON.stringify(noteJson));
+      if (snapshotBlob) fd.append('snapshot', snapshotBlob, 'snapshot.png');
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/notes/save`, { method: 'POST', body: fd, headers });
+      try { return await res.json(); } catch { return { success: false, message: 'Invalid server response' }; }
+    },
+
+    listNotes: async () => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/notes`, { headers });
+      try { return await res.json(); } catch { return { success: false, notes: [] }; }
+    },
+
+    newNote: async ({ title, docId }) => {
+      const token = localStorage.getItem('token');
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: `Bearer ${token}` } : {});
+      const res = await fetch(`${base}/api/notes/new`, { method: 'POST', headers, body: JSON.stringify({ title, docId }) });
+      try { return await res.json(); } catch { return { success: false }; }
+    },
+
+    deleteNote: async (id) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/notes/${id}`, { method: 'DELETE', headers });
+      try { return await res.json(); } catch { return { success: false }; }
+    }
   }), [base]);
 }

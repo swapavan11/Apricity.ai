@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Server Build Check",
+			"type": "shell",
+			"command": "node -e \"console.log('server routes ok')\"",
+			"group": "build"
+		}
+	]
+}

@@ -18,6 +18,7 @@ import quizRouter from './routes/quiz.js';
 import progressRouter from './routes/progress.js';
 import youtubeRouter from './routes/youtube.js';
 import healthRouter from './routes/health.js';
+import notesRouter from './routes/notes.js';
 import authRouter from './routes/auth.js';
 
 const app = express();
@@ -66,6 +67,7 @@ app.use('/api/quiz', quizRouter);
 app.use('/api/progress', progressRouter);
 app.use('/api/youtube', youtubeRouter);
 app.use('/api/health', healthRouter);
+app.use('/api/notes', notesRouter);
 
 app.use(notFound);
 app.use(errorHandler);
