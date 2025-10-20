@@ -5,6 +5,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
   const api = useApi();
   const [title, setTitle] = useState(initialTitle);
   const [saving, setSaving] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [error, setError] = useState('');
   const [size, setSize] = useState({ width: Math.min(window.innerWidth - 80, 900), height: Math.min(window.innerHeight - 120, 600) });
@@ -654,7 +655,14 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
   if (!open) return null;
 
   return (
-  <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
+  <div 
+    style={{ 
+      position: 'fixed', 
+      inset: 0, 
+      pointerEvents: 'none', 
+      zIndex: 50
+    }}
+  >
       {/* Panel (draggable + resizable). We keep pointerEvents on panel only so background remains interactive where modal isn't. */}
       <div
         ref={panelRef}
@@ -850,7 +858,31 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
           <button className="secondary" onClick={(e)=>{ e.stopPropagation(); setSidebarOpen(v => !v); }}>{sidebarOpen ? 'Hide Sidebar' : 'Show Sidebar'}</button>
           <button className="secondary" onClick={(e)=>{ e.stopPropagation(); setMaximized(m => !m); }}>{maximized ? 'Restore' : 'Maximize'}</button>
           <button className="secondary" title="Download current note as PDF" onClick={(e)=>{ e.stopPropagation(); const cur = notes.find(x=> x._id === currentNoteId); const noteObj = cur ? { ...cur, contentHtml: editorRef.current?.innerHTML ?? cur.contentHtml } : { _id: currentNoteId, title, contentHtml: editorRef.current?.innerHTML || '' }; exportNotePdf(noteObj); }}>Download</button>
-          <button className="secondary" onClick={(e)=>{ e.stopPropagation(); try{ clearTimeout(saveDebounced.current); }catch{}; (async()=>{ try { await saveNow({ forceSnapshot: true }); } finally { onClose && onClose(); } })(); }}>Close</button>
+          <button 
+            className={closing ? '' : 'secondary'} 
+            style={closing ? { 
+              background: '#ff4444', 
+              color: 'white', 
+              border: '1px solid #cc0000',
+              transition: 'all 0.3s ease'
+            } : {}}
+            disabled={closing}
+            onClick={(e)=>{ 
+              e.stopPropagation(); 
+              setClosing(true);
+              try{ clearTimeout(saveDebounced.current); }catch{}; 
+              (async()=>{ 
+                try { 
+                  await saveNow({ forceSnapshot: true }); 
+                } finally { 
+                  setClosing(false);
+                  onClose && onClose(); 
+                } 
+              })(); 
+            }}
+          >
+            {closing ? 'Closing...' : 'Close'}
+          </button>
         </div>
 
         {/* Toolbar - can be hidden */}
@@ -1239,20 +1271,34 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                   }}>Save</button>
                 )}
                 {dialog.type === 'delete' && (
-                  <button onClick={async ()=>{
-                    const n = dialog.note;
-                    const r = await api.deleteNote(n._id);
-                    if (r.success) {
-                      setNotes(prev => (prev||[]).filter(x => x._id !== n._id));
-                      if (currentNoteId === n._id) {
-                        setCurrentNoteId(null);
-                        if (editorRef.current) editorRef.current.innerHTML = '';
-                        strokesRef.current = [];
-                        redrawCanvas();
+                  <button 
+                    style={{ 
+                      background: '#ff4444', 
+                      color: 'white', 
+                      border: '1px solid #cc0000',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 600
+                    }}
+                    onClick={async ()=>{
+                      const n = dialog.note;
+                      const r = await api.deleteNote(n._id);
+                      if (r.success) {
+                        setNotes(prev => (prev||[]).filter(x => x._id !== n._id));
+                        if (currentNoteId === n._id) {
+                          setCurrentNoteId(null);
+                          if (editorRef.current) editorRef.current.innerHTML = '';
+                          strokesRef.current = [];
+                          redrawCanvas();
+                        }
+                        setDialog({ type: null, note: null, value: '' });
                       }
-                      setDialog({ type: null, note: null, value: '' });
-                    }
-                  }}>Delete</button>
+                    }}
+                  >
+                    Delete
+                  </button>
                 )}
               </div>
             </div>
