@@ -395,11 +395,9 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
         setNotes(prev => {
           const arr = [...(prev || [])];
           const idx = arr.findIndex(x => x._id === savedNote._id);
-          if (idx >= 0) {
-            arr[idx] = { ...arr[idx], title: savedNote.title, updatedAt: savedNote.updatedAt || new Date().toISOString() };
-          } else {
-            arr.unshift(savedNote);
-          }
+          const merged = { ...(arr[idx] || {}), ...savedNote };
+          merged.updatedAt = merged.updatedAt || new Date().toISOString();
+          if (idx >= 0) arr[idx] = merged; else arr.unshift(merged);
           arr.sort((a,b)=> new Date(b.updatedAt) - new Date(a.updatedAt));
           return arr;
         });
@@ -564,7 +562,18 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
           if (n.snapshotUrl) {
             const img = new Image();
             img.crossOrigin = 'anonymous';
-            img.onload = () => { if (!cancelled) { snapshotImageRef.current = img; redrawCanvas(); } };
+            img.onload = () => {
+              if (!cancelled) {
+                snapshotImageRef.current = img;
+                // Expand page height to fit snapshot aspect at current doc width
+                try {
+                  const w = docWidth || img.naturalWidth || (surfaceRef.current?.clientWidth || 900);
+                  const targetH = img.naturalWidth ? Math.ceil(img.naturalHeight * (w / img.naturalWidth)) : img.naturalHeight;
+                  setPageHeight(h => Math.max(h, targetH + 16));
+                } catch {}
+                redrawCanvas();
+              }
+            };
             img.src = n.snapshotUrl;
           } else {
             redrawCanvas();
@@ -646,6 +655,8 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                     // Save current note if dirty before switching
                     try { clearTimeout(saveDebounced.current); } catch {}
                     if ((editorDirtyRef.current || penDirtyRef.current) && currentNoteId) {
+                      // Force a snapshot of current strokes before switching
+                      redrawCanvas();
                       await saveNow();
                     }
                     // Switch note content
@@ -664,7 +675,15 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                     if (n.snapshotUrl) {
                       const img = new Image();
                       img.crossOrigin = 'anonymous';
-                      img.onload = () => { snapshotImageRef.current = img; redrawCanvas(); };
+                      img.onload = () => {
+                        snapshotImageRef.current = img;
+                        try {
+                          const w = docWidth || img.naturalWidth || (surfaceRef.current?.clientWidth || 900);
+                          const targetH = img.naturalWidth ? Math.ceil(img.naturalHeight * (w / img.naturalWidth)) : img.naturalHeight;
+                          setPageHeight(h => Math.max(h, targetH + 16));
+                        } catch {}
+                        redrawCanvas();
+                      };
                       img.src = n.snapshotUrl;
                     } else {
                       redrawCanvas();
@@ -1144,8 +1163,13 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                     const n = dialog.note;
                     const resp = await api.saveNote({ noteId: n._id, title: newTitle, docId: n.docId || '' });
                     if (resp.success) {
+                      const saved = resp.note || { _id: n._id, title: newTitle };
                       setNotes(prev => {
-                        const arr = (prev || []).map(x => x._id === n._id ? { ...x, title: newTitle, updatedAt: new Date().toISOString() } : x);
+                        const arr = [...(prev || [])];
+                        const idx = arr.findIndex(x => x._id === n._id);
+                        const merged = { ...(arr[idx] || {}), ...saved };
+                        merged.updatedAt = merged.updatedAt || new Date().toISOString();
+                        if (idx >= 0) arr[idx] = merged;
                         arr.sort((a,b)=> new Date(b.updatedAt) - new Date(a.updatedAt));
                         return arr;
                       });
