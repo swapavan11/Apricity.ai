@@ -33,6 +33,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
   const [notes, setNotes] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sidebarListRef = useRef(null);
+  const refreshTimerRef = useRef(null);
   const [currentNoteId, setCurrentNoteId] = useState(null);
   const editorDirtyRef = useRef(false);
   const penDirtyRef = useRef(false);
@@ -145,11 +146,50 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
     });
   };
 
+  // Fetch and sync notes quickly with server, keeping most recent on top
+  const fetchAndSyncNotes = async () => {
+    try {
+      const res = await api.listNotes();
+      const latest = res.success ? (res.notes || []) : [];
+      latest.sort((a,b)=> new Date(b.updatedAt) - new Date(a.updatedAt));
+      setNotes(prev => {
+        if (!prev || prev.length !== latest.length) return latest;
+        let identical = true;
+        for (let i=0;i<latest.length;i++) {
+          const a = latest[i], b = prev[i];
+          if (!b || a._id !== b._id || String(a.updatedAt) !== String(b.updatedAt)) { identical = false; break; }
+        }
+        return identical ? prev : latest;
+      });
+      if (currentNoteId && !latest.find(n => n._id === currentNoteId)) {
+        setCurrentNoteId(null);
+        if (editorRef.current) editorRef.current.innerHTML = '';
+        strokesRef.current = [];
+        snapshotImageRef.current = null;
+        redrawCanvas();
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     if (!open) return;
     applyImageStyles();
     adjustPageHeightToContent();
     setTimeout(fitCanvas, 0);
+  }, [open]);
+
+  // Fast refresh while open: poll and refresh on window focus
+  useEffect(() => {
+    if (!open) return;
+    // initial refresh after open
+    fetchAndSyncNotes();
+    const id = setInterval(fetchAndSyncNotes, 5000);
+    const onFocus = () => fetchAndSyncNotes();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      try { clearInterval(id); } catch {}
+      window.removeEventListener('focus', onFocus);
+    };
   }, [open]);
   // Custom palette popover
   const paletteBtnRef = useRef(null);
@@ -372,24 +412,31 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
   const getSnapshotBlob = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
+    // Prefer WEBP (smaller), fallback to PNG
+    const webp = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/webp', 0.85));
+    if (webp) return webp;
     return await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
   };
+  const lastSnapshotAtRef = useRef(0);
 
-  const saveNow = async () => {
+  const saveNow = async (opts = {}) => {
     try {
       if (!open) return;
       setSaving(true);
       setError('');
       // Only save when a note is selected; do not implicitly create a new note due to pen usage
       if (!currentNoteId) { setSaving(false); return; }
-      // Ensure canvas reflects latest strokes before snapshot
-      redrawCanvas();
+      const forceSnapshot = !!opts.forceSnapshot;
+      // Only snapshot if forced or pen changes since last snapshot (throttled 5s)
+      const shouldUploadSnapshot = forceSnapshot || (penDirtyRef.current && (Date.now() - (lastSnapshotAtRef.current || 0) > 5000));
+      if (shouldUploadSnapshot) redrawCanvas();
       const noteJson = JSON.stringify({ title, html: editorRef.current?.innerHTML || '' });
-      const snapshotBlob = await getSnapshotBlob();
+      const snapshotBlob = shouldUploadSnapshot ? await getSnapshotBlob() : null;
       const res = await api.saveNote({ noteId: currentNoteId, title, docId: associatedDocId || '', noteJson, snapshotBlob });
       if (!res.success) throw new Error(res.message || 'Failed to save');
       const savedNote = res.note;
       setLastSaved(new Date());
+      if (shouldUploadSnapshot) lastSnapshotAtRef.current = Date.now();
       // Update sidebar list immediately
       if (savedNote && savedNote._id) {
         setNotes(prev => {
@@ -403,7 +450,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
         });
       }
       editorDirtyRef.current = false;
-      penDirtyRef.current = false;
+      if (shouldUploadSnapshot) penDirtyRef.current = false;
     } catch (e) {
       setError(e.message || 'Autosave failed');
     } finally {
@@ -635,15 +682,12 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
         }}>
             <div style={{ padding: 10, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ opacity: 0.8 }}>🗂️ Notes</span>
-              <button className="secondary" onClick={async ()=>{
-                const res = await api.listNotes();
-                setNotes(res.success ? (res.notes || []) : []);
-              }}>Refresh</button>
+              <button className="secondary" onClick={async ()=>{ await fetchAndSyncNotes(); }}>Refresh</button>
               <button onClick={async ()=>{
                 // Save current note if dirty before creating new
                 try { clearTimeout(saveDebounced.current); } catch {}
                 if ((editorDirtyRef.current || penDirtyRef.current) && currentNoteId) {
-                  await saveNow();
+                  await saveNow({ forceSnapshot: true });
                 }
                 setDialog({ type: 'new', note: null, value: 'Untitled' });
               }}>New</button>
@@ -651,13 +695,17 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
             <div ref={sidebarListRef} style={{ overflow: 'auto', flex: 1 }}>
               {(notes || []).map((n) => (
                 <div key={n._id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <div data-note-id={n._id} onClick={async ()=>{
+                  <div
+                    data-note-id={n._id}
+                    role="button"
+                    aria-selected={currentNoteId === n._id}
+                    onClick={async ()=>{
                     // Save current note if dirty before switching
                     try { clearTimeout(saveDebounced.current); } catch {}
                     if ((editorDirtyRef.current || penDirtyRef.current) && currentNoteId) {
                       // Force a snapshot of current strokes before switching
                       redrawCanvas();
-                      await saveNow();
+                      await saveNow({ forceSnapshot: true });
                     }
                     // Switch note content
                     setTitle(n.title || 'Notebook');
@@ -690,9 +738,21 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                     }
                     editorDirtyRef.current = false;
                     penDirtyRef.current = false;
-                  }} style={{ padding: '10px 12px', cursor: 'pointer', display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
+                  }}
+                    style={{
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      alignItems: 'center',
+                      gap: 8,
+                      background: currentNoteId === n._id ? 'rgba(14,165,233,0.12)' : 'transparent',
+                      borderLeft: currentNoteId === n._id ? '3px solid #0ea5e9' : '3px solid transparent',
+                      transition: 'background 120ms ease, border-color 120ms ease'
+                    }}
+                  >
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title || 'Notebook'}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: currentNoteId === n._id ? '#0ea5e9' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title || 'Notebook'}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>{new Date(n.updatedAt).toLocaleString()}</div>
                     </div>
                     <div style={{ display: 'flex', gap: 6 }} onClick={(e)=> e.stopPropagation()}>
@@ -790,7 +850,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
           <button className="secondary" onClick={(e)=>{ e.stopPropagation(); setSidebarOpen(v => !v); }}>{sidebarOpen ? 'Hide Sidebar' : 'Show Sidebar'}</button>
           <button className="secondary" onClick={(e)=>{ e.stopPropagation(); setMaximized(m => !m); }}>{maximized ? 'Restore' : 'Maximize'}</button>
           <button className="secondary" title="Download current note as PDF" onClick={(e)=>{ e.stopPropagation(); const cur = notes.find(x=> x._id === currentNoteId); const noteObj = cur ? { ...cur, contentHtml: editorRef.current?.innerHTML ?? cur.contentHtml } : { _id: currentNoteId, title, contentHtml: editorRef.current?.innerHTML || '' }; exportNotePdf(noteObj); }}>Download</button>
-          <button className="secondary" onClick={(e)=>{ e.stopPropagation(); try{ clearTimeout(saveDebounced.current); }catch{}; (async()=>{ try { await saveNow(); } finally { onClose && onClose(); } })(); }}>Close</button>
+          <button className="secondary" onClick={(e)=>{ e.stopPropagation(); try{ clearTimeout(saveDebounced.current); }catch{}; (async()=>{ try { await saveNow({ forceSnapshot: true }); } finally { onClose && onClose(); } })(); }}>Close</button>
         </div>
 
         {/* Toolbar - can be hidden */}

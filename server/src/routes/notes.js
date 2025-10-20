@@ -65,45 +65,40 @@ router.post('/save', authenticateToken, upload.single('snapshot'), async (req, r
     }
 
     const folderBase = `quizhive/users/${userId}/notes`;
-    const timestamp = Date.now();
 
-  let jsonUpload = null;
-    let imageUpload = null;
+    // 1) Ensure we have a note to update (create first when needed)
+    let note = null;
+    if (noteId) {
+      note = await Note.findOne({ _id: noteId, user: req.user._id });
+      if (!note) return res.status(404).json({ success: false, message: 'Note not found' });
+    } else {
+      note = await Note.create({ user: userId, title, docId: docId || undefined, contentHtml: '' });
+    }
 
-    // Upload JSON as raw file (data URI)
-    let parsedHtml = '';
+    // 2) Update basic fields and contentHtml from noteJson (no JSON Cloudinary upload)
+    note.title = title || note.title;
+    note.docId = docId || note.docId;
     if (noteJson && noteJson !== 'undefined' && noteJson !== 'null') {
-      // noteJson could be stringified JSON or plain HTML envelope. We try to parse safely.
-      let payloadStr = noteJson;
-      if (typeof payloadStr !== 'string') payloadStr = String(payloadStr);
-      const dataUri = 'data:application/json;base64,' + Buffer.from(payloadStr, 'utf-8').toString('base64');
-      jsonUpload = await cloudinary.uploader.upload(dataUri, {
-        resource_type: 'raw',
-        folder: folderBase,
-        public_id: `note_${timestamp}`,
-        overwrite: true,
-        type: 'authenticated',
-        use_filename: false,
-        format: 'json'
-      });
-
       try {
+        const payloadStr = typeof noteJson === 'string' ? noteJson : String(noteJson);
         const obj = JSON.parse(payloadStr);
-        parsedHtml = obj?.html || '';
+        const parsedHtml = obj?.html || '';
+        if (typeof parsedHtml === 'string') note.contentHtml = parsedHtml;
       } catch {
-        parsedHtml = '';
+        // ignore malformed noteJson
       }
     }
 
-    // Upload snapshot image if present (buffer -> stream)
+    // 3) Upload snapshot image if present (buffer -> stream) with STABLE public_id per note
     if (req.file) {
-      imageUpload = await new Promise((resolve, reject) => {
+      const imageUpload = await new Promise((resolve, reject) => {
         const passthrough = new stream.PassThrough();
         const uploadStream = cloudinary.uploader.upload_stream({
           resource_type: 'image',
           folder: folderBase,
-          public_id: `note_${timestamp}_snapshot`,
+          public_id: `note_${note._id}_snapshot`,
           overwrite: true,
+          invalidate: true,
           transformation: [{ quality: 'auto', fetch_format: 'auto' }]
         }, (err, result) => {
           if (err) reject(err); else resolve(result);
@@ -111,30 +106,11 @@ router.post('/save', authenticateToken, upload.single('snapshot'), async (req, r
         passthrough.end(req.file.buffer);
         passthrough.pipe(uploadStream);
       });
+      note.snapshotUrl = imageUpload.secure_url;
+      note.snapshotPublicId = imageUpload.public_id;
     }
 
-    let note;
-    if (noteId) {
-      note = await Note.findOne({ _id: noteId, user: req.user._id });
-      if (!note) return res.status(404).json({ success: false, message: 'Note not found' });
-      note.title = title || note.title;
-      note.docId = docId || note.docId;
-      if (parsedHtml) note.contentHtml = parsedHtml;
-      if (jsonUpload) { note.jsonUrl = jsonUpload.secure_url; note.jsonPublicId = jsonUpload.public_id; }
-      if (imageUpload) { note.snapshotUrl = imageUpload.secure_url; note.snapshotPublicId = imageUpload.public_id; }
-      await note.save();
-    } else {
-      note = await Note.create({
-        user: userId,
-        title,
-        docId: docId || undefined,
-        contentHtml: parsedHtml,
-        jsonUrl: jsonUpload?.secure_url || null,
-        jsonPublicId: jsonUpload?.public_id || null,
-        snapshotUrl: imageUpload?.secure_url || null,
-        snapshotPublicId: imageUpload?.public_id || null
-      });
-    }
+    await note.save();
 
     return res.json({
       success: true,
