@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthProvider.jsx';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -11,6 +12,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const [redirecting, setRedirecting] = useState(false);
+  const navigate = useNavigate();
   // Simplified login: accept email OR mobile number in the same field
   const [useMobile, setUseMobile] = useState(false);
   const [countryDial, setCountryDial] = useState('1');
@@ -138,7 +140,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
                 ))}
               </select>
               <input
-                type="text"
+                type="tel"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
@@ -158,7 +160,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
             </div>
           ) : (
             <input
-              type="text"
+              type="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
@@ -206,6 +208,24 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
           />
         </div>
 
+        <div style={{ display:'flex', justifyContent:'flex-end', marginTop: '4px', marginBottom: '12px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/reset-password')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent)',
+              padding: 0,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            Forgot password?
+          </button>
+        </div>
+        
         <button
           type="submit"
           disabled={loading}

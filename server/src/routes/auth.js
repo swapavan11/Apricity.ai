@@ -384,6 +384,66 @@ router.post('/change-password', authenticateToken, async (req, res) => {
   }
 });
 
+// Forgot password (request reset email)
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email: String(email).trim().toLowerCase() });
+    // Always respond success to avoid account enumeration
+    if (!user) {
+      return res.json({ success: true, message: 'If an account exists for this email, a reset link has been sent.' });
+    }
+
+    const token = user.generatePasswordResetToken();
+    await user.save();
+    try {
+      await sendPasswordReset(user.email, user.name, token);
+    } catch (e) {
+      console.error('Failed to send password reset email:', e);
+      // Still respond success to avoid enumeration/leaking
+    }
+    return res.json({ success: true, message: 'If an account exists for this email, a reset link has been sent.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ success: false, message: 'Failed to process password reset request', error: error.message });
+  }
+});
+
+// Reset password using token
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, message: 'Token and a new password (min 6 chars) are required' });
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+    }
+
+    user.password = String(newPassword);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    // Auto-login after password reset for a smooth UX
+    const jwt = generateToken(user._id);
+    return res.json({ success: true, message: 'Password reset successful', token: jwt, user: user.getPublicProfile() });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reset password', error: error.message });
+  }
+});
+
 // Google OAuth routes
 router.get('/google', passport.authenticate('google', {
   scope: ['profile', 'email']

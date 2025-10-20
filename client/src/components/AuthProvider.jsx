@@ -162,6 +162,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const forgotPassword = async (email) => {
+    try {
+      const response = await axios.post('/api/auth/forgot-password', { email });
+      return { success: true, message: response.data?.message || 'If an account exists, a reset link has been sent.' };
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Failed to send reset link' };
+    }
+  };
+
+  const resetPassword = async (token, newPassword) => {
+    try {
+      const response = await axios.post('/api/auth/reset-password', { token, newPassword });
+      const newToken = response.data?.token;
+      const userData = response.data?.user;
+      if (newToken && userData) {
+        localStorage.setItem('token', newToken);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        setToken(newToken);
+        setUser(userData);
+        setIsGuestMode(false);
+      }
+      return { success: true, message: response.data?.message || 'Password reset successful', token: newToken, user: userData };
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Failed to reset password' };
+    }
+  };
+
   // Removed mobile OTP resend
 
   const logout = () => {
@@ -229,6 +256,8 @@ export const AuthProvider = ({ children }) => {
     register,
     verifyEmail,
     resendEmailVerification,
+  forgotPassword,
+  resetPassword,
     logout,
     updateProfile,
     uploadAvatar,
