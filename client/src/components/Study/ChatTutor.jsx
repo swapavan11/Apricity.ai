@@ -85,8 +85,8 @@ export default function ChatTutor({
         style={{
           flex: 1,
           overflowY: "auto",
-          background: "#0f1530",
-          border: "1px solid #1f2b57",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
           borderRadius: 10,
           padding: "16px",
           marginBottom: "12px",
@@ -122,7 +122,7 @@ export default function ChatTutor({
                 maxWidth: "75%",
                 padding: "12px 16px",
                 borderRadius: "18px",
-                background: m.role === "user" ? "var(--accent)" : "#1a244d",
+                background: m.role === "user" ? "var(--accent)" : "var(--surface)",
                 color: m.role === "user" ? "#0a0f25" : "var(--text)",
               }}
             >
@@ -156,7 +156,7 @@ export default function ChatTutor({
               style={{
                 padding: "12px 16px",
                 borderRadius: "18px",
-                background: "#1a244d",
+                background: "var(--surface)",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
@@ -181,8 +181,8 @@ export default function ChatTutor({
       {/* Input area */}
       <div
         style={{
-          background: "#0d142c",
-          border: "1px solid #1a244d",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
           borderRadius: 10,
           padding: "12px",
           flexShrink: 0,
@@ -193,9 +193,9 @@ export default function ChatTutor({
             rows={1}
             style={{
               flex: 1,
-              background: "#0f1530",
+              background: "var(--input-bg)",
               color: "var(--text)",
-              border: "1px solid #1f2b57",
+              border: "1px solid var(--border)",
               borderRadius: 8,
               padding: "12px",
               resize: "none",

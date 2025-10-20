@@ -226,7 +226,7 @@ export default function Study({ selected, docs }) {
           width:`${leftPanelWidth}%`,
           height:'100%',
           background:'var(--panel)',
-          borderRight:'1px solid #1f2b57',
+          borderRight:'1px solid var(--border)',
           display:'flex',
           flexDirection:'column',
           position:'relative',
@@ -269,7 +269,7 @@ export default function Study({ selected, docs }) {
         style={{
           width:'8px',
           height:'100vh',
-          background:'#1f2b57',
+          background:'var(--border)',
           cursor:'col-resize',
           display:'flex',
           alignItems:'center',
@@ -565,12 +565,12 @@ export default function Study({ selected, docs }) {
                         <div style={{color:'var(--muted)'}}>No uploaded PDFs yet. Upload a PDF to enable the Select option.</div>
                       ) : (
                         <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                          <select value={topicDocId} onChange={(e)=>setTopicDocId(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'#0f1530', color:'var(--text)'}}>
+                          <select value={topicDocId} onChange={(e)=>setTopicDocId(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'var(--input-bg)', color:'var(--text)', border:'1px solid var(--border)'}}>
                             <option value="all">All uploaded PDFs</option>
                             {docs.map(d => <option key={d._id} value={d._id}>{d.title} ({d.pages}p)</option>)}
                           </select>
                           {topicList.length > 0 && (
-                            <select value={selectedTopic} onChange={(e)=>setSelectedTopic(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'#0f1530', color:'var(--text)'}}>
+                            <select value={selectedTopic} onChange={(e)=>setSelectedTopic(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'var(--input-bg)', color:'var(--text)', border:'1px solid var(--border)'}}>
                               <option value="">All topics</option>
                               {topicList.map((t, idx) => <option key={idx} value={t}>{t}</option>)}
                             </select>

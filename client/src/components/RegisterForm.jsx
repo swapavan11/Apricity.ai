@@ -116,7 +116,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
       padding: '2rem',
       background: 'var(--panel)',
       borderRadius: '12px',
-      border: '1px solid #1f2b57'
+      border: '1px solid var(--border)'
     }}>
       <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ 
@@ -139,12 +139,12 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
 
       {error && (
         <div style={{
-          background: '#ff7c7c20',
-          border: '1px solid #ff7c7c',
+          background: 'var(--error-bg)',
+          border: '1px solid var(--error-border)',
           borderRadius: '8px',
           padding: '12px',
           marginBottom: '1rem',
-          color: '#ff7c7c',
+          color: 'var(--error-text)',
           fontSize: '0.9rem'
         }}>
           {error}
@@ -153,12 +153,12 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
 
       {success && (
         <div style={{
-          background: '#6ee7b720',
-          border: '1px solid #6ee7b7',
+          background: 'var(--success-bg)',
+          border: '1px solid var(--success-border)',
           borderRadius: '8px',
           padding: '12px',
           marginBottom: '1rem',
-          color: '#6ee7b7',
+          color: 'var(--success-text)',
           fontSize: '0.9rem'
         }}>
           {success}
@@ -186,8 +186,8 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             style={{
               width: '100%',
               padding: '12px',
-              background: '#0f1530',
-              border: '1px solid #1f2b57',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               color: 'var(--text)',
               fontSize: '0.9rem'
@@ -216,8 +216,8 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             style={{
               width: '100%',
               padding: '12px',
-              background: '#0f1530',
-              border: '1px solid #1f2b57',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               color: 'var(--text)',
               fontSize: '0.9rem'
@@ -240,7 +240,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             <select
               value={countryDial}
               onChange={(e) => setCountryDial(e.target.value)}
-              style={{ padding: '12px', background: '#0f1530', border: '1px solid #1f2b57', borderRadius: '8px', color: 'var(--text)' }}
+              style={{ padding: '12px', background: 'var(--input-bg)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text)' }}
             >
               {COUNTRY_OPTIONS.map(opt => (
                 <option key={opt.code} value={opt.dial}>+{opt.dial} {opt.code}</option>
@@ -255,8 +255,8 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
               style={{
                 flex: 1,
                 padding: '12px',
-                background: '#0f1530',
-                border: '1px solid #1f2b57',
+                background: 'var(--input-bg)',
+                border: '1px solid var(--border)',
                 borderRadius: '8px',
                 color: 'var(--text)',
                 fontSize: '0.9rem'
@@ -286,8 +286,8 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             style={{
               width: '100%',
               padding: '12px',
-              background: '#0f1530',
-              border: '1px solid #1f2b57',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               color: 'var(--text)',
               fontSize: '0.9rem'
@@ -316,8 +316,8 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
             style={{
               width: '100%',
               padding: '12px',
-              background: '#0f1530',
-              border: '1px solid #1f2b57',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               color: 'var(--text)',
               fontSize: '0.9rem'
@@ -332,7 +332,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
           style={{
             width: '100%',
             padding: '12px',
-            background: loading ? '#1f2b57' : 'var(--accent)',
+            background: loading ? 'var(--border)' : 'var(--accent)',
             color: loading ? 'var(--muted)' : '#0a0f25',
             border: 'none',
             borderRadius: '8px',
@@ -351,7 +351,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
         textAlign: 'center',
         marginTop: '1.5rem',
         paddingTop: '1.5rem',
-        borderTop: '1px solid #1f2b57'
+  borderTop: '1px solid var(--border)'
       }}>
         <p style={{ 
           margin: '0 0 1rem 0', 
@@ -364,7 +364,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
           onClick={onSwitchToLogin}
           style={{
             background: 'none',
-            border: '1px solid #1f2b57',
+            border: '1px solid var(--border)',
             color: 'var(--accent)',
             padding: '8px 16px',
             borderRadius: '6px',
@@ -390,7 +390,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
               onClick={() => setRedirectingGoogle(true)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
-                background: '#0f1530', border: '1px solid #1f2b57', color: 'var(--text)',
+                background: 'var(--input-bg)', border: '1px solid var(--border)', color: 'var(--text)',
                 padding: '10px 16px', borderRadius: 8, textDecoration: 'none', fontSize: '0.9rem'
               }}
             >

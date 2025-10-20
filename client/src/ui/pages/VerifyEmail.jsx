@@ -39,10 +39,10 @@ export default function VerifyEmail() {
 
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'var(--bg)' }}>
-      <div style={{ textAlign:'center', color:'var(--text)', padding:'2rem', background:'var(--panel)', border:'1px solid #1f2b57', borderRadius:12, maxWidth: 480 }}>
+  <div style={{ textAlign:'center', color:'var(--text)', padding:'2rem', background:'var(--panel)', border:'1px solid var(--border)', borderRadius:12, maxWidth: 480 }}>
         {!error && !verified && (
           <>
-            <div style={{ width:40, height:40, border:'3px solid #1f2b57', borderTop:'3px solid var(--accent)', borderRadius:'50%', animation:'spin 1s linear infinite', margin:'0 auto 1rem' }} />
+            <div style={{ width:40, height:40, border:'3px solid var(--border)', borderTop:'3px solid var(--accent)', borderRadius:'50%', animation:'spin 1s linear infinite', margin:'0 auto 1rem' }} />
             <div style={{ color:'var(--muted)' }}>{status}</div>
           </>
         )}

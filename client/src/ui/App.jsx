@@ -329,6 +329,37 @@ function AppContent() {
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [themePref, setThemePref] = useState(() => localStorage.getItem('themePreference') || 'dark');
+  const [theme, setTheme] = useState('dark');
+
+  useEffect(() => {
+    const applyTheme = () => {
+      // resolve the effective theme from preference
+      let resolved = themePref;
+      if (themePref === 'system') {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        resolved = prefersDark ? 'dark' : 'light';
+      }
+      setTheme(resolved);
+      try {
+        document.body.setAttribute('data-theme', resolved);
+      } catch {}
+    };
+
+    applyTheme();
+    // listen to system changes if on system pref
+    const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    const handler = () => { if (themePref === 'system') applyTheme(); };
+    if (mq) {
+      mq.addEventListener ? mq.addEventListener('change', handler) : mq.addListener && mq.addListener(handler);
+    }
+    try { localStorage.setItem('themePreference', themePref); } catch {}
+    return () => {
+      if (mq) {
+        mq.removeEventListener ? mq.removeEventListener('change', handler) : mq.removeListener && mq.removeListener(handler);
+      }
+    };
+  }, [themePref]);
 
   // Redirect first open to Home
   useEffect(() => {
@@ -402,7 +433,7 @@ function AppContent() {
             style={{
               width: "40px",
               height: "40px",
-              border: "3px solid #1f2b57",
+              border: "3px solid var(--border)",
               borderTop: "3px solid var(--accent)",
               borderRadius: "50%",
               animation: "spin 1s linear infinite",
@@ -533,8 +564,9 @@ function AppContent() {
               marginLeft: "16px",
             }}
           >
+            {/* Theme toggle moved to Profile Modal */}
             {(!isGuestMode && user?.avatar && !avatarError) ? (
-              <img src={user.avatar} alt="avatar" onError={()=>setAvatarError(true)} style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover', border:'2px solid #1f2b57' }} />
+              <img src={user.avatar} alt="avatar" onError={()=>setAvatarError(true)} style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--border)' }} />
             ) : (
               <div
                 style={{
@@ -585,7 +617,7 @@ function AppContent() {
                   onClick={() => setProfileOpen(true)}
                   style={{
                     background: "none",
-                    border: "1px solid #1f2b57",
+                    border: "1px solid var(--border)",
                     color: "var(--muted)",
                     padding: "4px 8px",
                     borderRadius: "4px",
@@ -603,7 +635,7 @@ function AppContent() {
                 }}
                 style={{
                   background: "none",
-                  border: "1px solid #1f2b57",
+                  border: "1px solid var(--border)",
                   color: "var(--muted)",
                   padding: "4px 8px",
                   borderRadius: "4px",
@@ -616,7 +648,7 @@ function AppContent() {
           </div>
         </div>
       </div>
-  {profileOpen && <ProfileModal open={profileOpen} onClose={()=>setProfileOpen(false)} />}
+  {profileOpen && <ProfileModal open={profileOpen} onClose={()=>setProfileOpen(false)} themePref={themePref} setThemePref={setThemePref} />}
 
       {/* 🔹 Main Content */}
       <div className="content" style={{ height: "calc(100vh - 60px)" }}>

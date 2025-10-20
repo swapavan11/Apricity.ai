@@ -62,7 +62,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
       padding: '2rem',
       background: 'var(--panel)',
       borderRadius: '12px',
-      border: '1px solid #1f2b57'
+  border: '1px solid var(--border)'
     }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h2 style={{ 
@@ -98,11 +98,11 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
       {/* Identifier hint toggle */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <button type="button" onClick={() => { setUseMobile(false); setError(''); }}
-          style={{ flex: 1, padding: 10, borderRadius: 8, border: !useMobile?'1px solid var(--accent)':'1px solid #1f2b57', background: !useMobile?'#13204a':'#0f1530', color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>
+          style={{ flex: 1, padding: 10, borderRadius: 8, border: !useMobile?'1px solid var(--accent)':'1px solid var(--border)', background: !useMobile?'#5e82f5ff':'var(--input-bg)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>
           Use Email
         </button>
         <button type="button" onClick={() => { setUseMobile(true); setError(''); }}
-          style={{ flex: 1, padding: 10, borderRadius: 8, border: useMobile?'1px solid var(--accent)':'1px solid #1f2b57', background: useMobile?'#13204a':'#0f1530', color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>
+          style={{ flex: 1, padding: 10, borderRadius: 8, border: useMobile?'1px solid var(--accent)':'1px solid var(--border)', background: useMobile?'#5e82f5ff':'var(--input-bg)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>
           Use Mobile
         </button>
       </div>
@@ -118,37 +118,64 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
           }}>
             {useMobile ? 'Mobile Number' : 'Email Address or Mobile'}
           </label>
-            {useMobile && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <select
-                  value={countryDial}
-                  onChange={(e) => setCountryDial(e.target.value)}
-                  style={{ padding: 12, background: '#0f1530', border: '1px solid #1f2b57', borderRadius: 8, color: 'var(--text)' }}
-                >
-                  {COUNTRY_OPTIONS.map(opt => (
-                    <option key={opt.code} value={opt.dial}>+{opt.dial} {opt.code}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          <input
-            type="text"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: '#0f1530',
-              border: '1px solid #1f2b57',
-              borderRadius: '8px',
-              color: 'var(--text)',
-              fontSize: '0.9rem'
-            }}
-            placeholder={useMobile ? 'Enter your mobile number' : 'Enter your email or mobile'}
-          />
-  </div>
+          {useMobile ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select
+                value={countryDial}
+                onChange={(e) => setCountryDial(e.target.value)}
+                style={{
+                  padding: '12px',
+                  background: 'var(--input-bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  color: 'var(--text)',
+                  flex: '0 0 120px',
+                  minWidth: 0
+                }}
+              >
+                {COUNTRY_OPTIONS.map(opt => (
+                  <option key={opt.code} value={opt.dial}>+{opt.dial} {opt.code}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: 'var(--input-bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  color: 'var(--text)',
+                  fontSize: '0.9rem',
+                  minWidth: 0
+                }}
+                placeholder="Enter your mobile number"
+              />
+            </div>
+          ) : (
+            <input
+              type="text"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: 'var(--input-bg)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                color: 'var(--text)',
+                fontSize: '0.9rem'
+              }}
+              placeholder="Enter your email or mobile"
+            />
+          )}
+        </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label style={{
@@ -169,8 +196,8 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
             style={{
               width: '100%',
               padding: '12px',
-              background: '#0f1530',
-              border: '1px solid #1f2b57',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
               color: 'var(--text)',
               fontSize: '0.9rem'
@@ -185,7 +212,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
           style={{
             width: '100%',
             padding: '12px',
-            background: loading ? '#1f2b57' : 'var(--accent)',
+            background: loading ? 'var(--border)' : 'var(--accent)',
             color: loading ? 'var(--muted)' : '#0a0f25',
             border: 'none',
             borderRadius: '8px',
@@ -203,7 +230,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
         textAlign: 'center',
         marginTop: '1.5rem',
         paddingTop: '1.5rem',
-        borderTop: '1px solid #1f2b57'
+  borderTop: '1px solid var(--border)'
       }}>
         <p style={{ 
           margin: '0 0 1rem 0', 
@@ -216,7 +243,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
           onClick={onSwitchToRegister}
           style={{
             background: 'none',
-            border: '1px solid #1f2b57',
+            border: '1px solid var(--border)',
             color: 'var(--accent)',
             padding: '8px 16px',
             borderRadius: '6px',
@@ -249,8 +276,8 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '8px',
-            background: '#0f1530',
-            border: '1px solid #1f2b57',
+            background: 'var(--input-bg)',
+            border: '1px solid var(--border)',
             color: 'var(--text)',
             padding: '10px 16px',
             borderRadius: '8px',

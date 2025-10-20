@@ -49,7 +49,7 @@ const OAuthCallback = () => {
         <div style={{
           width: '40px',
           height: '40px',
-          border: '3px solid #1f2b57',
+          border: '3px solid var(--border)',
           borderTop: '3px solid var(--accent)',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite',

@@ -60,7 +60,7 @@ const ModeSelection = ({ onModeSelected }) => {
           <div style={{
             background: 'var(--panel)',
             borderRadius: '16px',
-            border: '2px solid #1f2b57',
+            border: '2px solid var(--border)',
             padding: '2rem',
             textAlign: 'center',
             cursor: 'pointer',
@@ -73,7 +73,7 @@ const ModeSelection = ({ onModeSelected }) => {
             e.target.style.transform = 'translateY(-4px)';
           }}
           onMouseLeave={(e) => {
-            e.target.style.borderColor = '#1f2b57';
+            e.target.style.borderColor = 'var(--border)';
             e.target.style.transform = 'translateY(0)';
           }}
           onClick={() => {
@@ -113,7 +113,7 @@ const ModeSelection = ({ onModeSelected }) => {
             </p>
             
             <div style={{
-              background: '#0f1530',
+              background: 'var(--input-bg)',
               borderRadius: '8px',
               padding: '1rem',
               marginBottom: '1.5rem',
@@ -174,7 +174,7 @@ const ModeSelection = ({ onModeSelected }) => {
           <div style={{
             background: 'var(--panel)',
             borderRadius: '16px',
-            border: '2px solid #1f2b57',
+            border: '2px solid var(--border)',
             padding: '2rem',
             textAlign: 'center',
             cursor: 'pointer',
@@ -187,7 +187,7 @@ const ModeSelection = ({ onModeSelected }) => {
             e.target.style.transform = 'translateY(-4px)';
           }}
           onMouseLeave={(e) => {
-            e.target.style.borderColor = '#1f2b57';
+            e.target.style.borderColor = 'var(--border)';
             e.target.style.transform = 'translateY(0)';
           }}
           onClick={() => onModeSelected?.('auth')}>
@@ -222,7 +222,7 @@ const ModeSelection = ({ onModeSelected }) => {
             </p>
             
             <div style={{
-              background: '#0f1530',
+              background: 'var(--input-bg)',
               borderRadius: '8px',
               padding: '1rem',
               marginBottom: '1.5rem',

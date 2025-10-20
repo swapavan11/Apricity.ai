@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from './AuthProvider.jsx';
 
-export default function ProfileModal({ open, onClose }) {
+export default function ProfileModal({ open, onClose, themePref, setThemePref }) {
   const { user, updateProfile, uploadAvatar } = useAuth();
   const [mobile, setMobile] = useState(user?.mobile || '');
   const [mobileLocked, setMobileLocked] = useState(!!user?.mobile);
@@ -17,7 +17,7 @@ export default function ProfileModal({ open, onClose }) {
   const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [countryDial, setCountryDial] = useState('1');
   const COUNTRY_OPTIONS = [
-    { code: 'US', dial: '1' }, { code: 'IN', dial: '91' }, { code: 'GB', dial: '44' }, { code: 'CA', dial: '1' }, { code: 'AU', dial: '61' }, { code: 'SG', dial: '65' }, { code: 'DE', dial: '49' }, { code: 'FR', dial: '33' }, { code: 'ZA', dial: '27' }, { code: 'BR', dial: '55' }
+     { code: 'IN', dial: '91' }, { code: 'US', dial: '1' }, { code: 'GB', dial: '44' }, { code: 'CA', dial: '1' }, { code: 'AU', dial: '61' }, { code: 'SG', dial: '65' }, { code: 'DE', dial: '49' }, { code: 'FR', dial: '33' }, { code: 'ZA', dial: '27' }, { code: 'BR', dial: '55' }
   ];
 
   const buildE164 = (dial, number) => {
@@ -150,38 +150,38 @@ export default function ProfileModal({ open, onClose }) {
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, opacity: animateIn ? 1 : 0, transition: 'opacity 180ms ease' }}>
-  <div style={{ width: 'min(760px, 94vw)', boxSizing:'border-box', maxWidth: 760, display:'flex', flexDirection:'column', background: 'var(--panel)', border:'1px solid #1f2b57', borderRadius: 12, overflow:'hidden', transform: animateIn ? 'scale(1)' : 'scale(0.96)', opacity: animateIn ? 1 : 0, transition: 'transform 200ms ease, opacity 200ms ease' }}>
+  <div style={{ width: 'min(760px, 94vw)', boxSizing:'border-box', maxWidth: 760, display:'flex', flexDirection:'column', background: 'var(--panel)', border:'1px solid var(--border)', borderRadius: 12, overflow:'hidden', transform: animateIn ? 'scale(1)' : 'scale(0.96)', opacity: animateIn ? 1 : 0, transition: 'transform 200ms ease, opacity 200ms ease' }}>
         <div style={{ background:'linear-gradient(135deg, var(--accent), var(--accent2))', padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h3 style={{ margin:0, color:'#0a0f25' }}>Your Profile</h3>
-          <button onClick={onClose} style={{ background:'#0f1530', border:'1px solid #1f2b57', color:'var(--muted)', padding:'6px 10px', borderRadius:6, cursor:'pointer' }}>Close</button>
+          <button onClick={onClose} style={{ background:'var(--input-bg)', border:'1px solid var(--border)', color:'var(--muted)', padding:'6px 10px', borderRadius:6, cursor:'pointer' }}>Close</button>
         </div>
         <div style={{ padding:20 }}>
         <div style={{ display:'grid', gridTemplateColumns:'30% 70%', gap:20, alignItems:'stretch' }}>
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', gap:12, alignSelf:'center' }}>
             <div style={{ position:'relative', width:180, height:180 }}>
             {avatarUrl ? (
-              <img src={avatarUrl} alt="avatar" onError={(e)=>{ e.currentTarget.style.display='none'; }} style={{ width:180, height:180, borderRadius:'50%', objectFit:'cover', border:'2px solid #1f2b57' }} />
+              <img src={avatarUrl} alt="avatar" onError={(e)=>{ e.currentTarget.style.display='none'; }} style={{ width:180, height:180, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--border)' }} />
             ) : (
-              <div style={{ width:180, height:180, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', color:'#0a0f25', fontWeight:900, fontSize:64, border:'2px solid #1f2b57' }}>
+              <div style={{ width:180, height:180, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', color:'#0a0f25', fontWeight:900, fontSize:64, border:'2px solid var(--border)' }}>
                 {initials}
               </div>
             )}
-            <button onClick={()=>setShowAvatarMenu(v=>!v)} title="Edit avatar" style={{ position:'absolute', right:12, bottom:12, width:44, height:44, borderRadius:'50%', background:'#0f1530', border:'1px solid #1f2b57', color:'var(--text)', cursor:'pointer', display:'grid', placeItems:'center' }}>
+            <button onClick={()=>setShowAvatarMenu(v=>!v)} title="Edit avatar" style={{ position:'absolute', right:12, bottom:12, width:44, height:44, borderRadius:'50%', background:'var(--input-bg)', border:'1px solid var(--border)', color:'var(--text)', cursor:'pointer', display:'grid', placeItems:'center' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor"/>
                 <path d="M20.71 7.04a1.003 1.003 0 000-1.42l-2.34-2.34a1.003 1.003 0 00-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" fill="currentColor"/>
               </svg>
             </button>
             {showAvatarMenu && (
-              <div style={{ position:'absolute', right:10, bottom:56, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, padding:8, display:'grid', gap:6, minWidth:160, zIndex:10 }}>
-                <label style={{ display:'block', color:'var(--text)', cursor:'pointer', padding:'6px 8px', borderRadius:6, border:'1px solid #1f2b57' }}>
+              <div style={{ position:'absolute', right:10, bottom:56, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, padding:8, display:'grid', gap:6, minWidth:160, zIndex:10 }}>
+                <label style={{ display:'block', color:'var(--text)', cursor:'pointer', padding:'6px 8px', borderRadius:6, border:'1px solid var(--border)' }}>
                   {uploading ? 'Uploading…' : 'Upload image'}
                   <input type="file" accept="image/*" onChange={(e)=>{ setShowAvatarMenu(false); onAvatarFile(e); }} style={{ display:'none' }} />
                 </label>
                 {avatarUrl && (
-                  <button onClick={()=>{ setShowAvatarMenu(false); removeAvatar(); }} style={{ textAlign:'left', background:'none', border:'1px solid #1f2b57', color:'#f36', padding:'6px 8px', borderRadius:6, cursor:'pointer' }}>Remove</button>
+                  <button onClick={()=>{ setShowAvatarMenu(false); removeAvatar(); }} style={{ textAlign:'left', background:'none', border:'1px solid var(--border)', color:'#f36', padding:'6px 8px', borderRadius:6, cursor:'pointer' }}>Remove</button>
                 )}
-                <button onClick={()=>setShowAvatarMenu(false)} style={{ textAlign:'left', background:'none', border:'1px solid #1f2b57', color:'var(--muted)', padding:'6px 8px', borderRadius:6, cursor:'pointer' }}>Cancel</button>
+                <button onClick={()=>setShowAvatarMenu(false)} style={{ textAlign:'left', background:'none', border:'1px solid var(--border)', color:'var(--muted)', padding:'6px 8px', borderRadius:6, cursor:'pointer' }}>Cancel</button>
               </div>
             )}
             </div>
@@ -191,20 +191,32 @@ export default function ProfileModal({ open, onClose }) {
             </div>
           </div>
           <div style={{ maxWidth: 480, width:'100%' }}>
-            {msg && <div style={{ background:'#223a2a', border:'1px solid #2f8f46', color:'#bcedc3', padding:10, borderRadius:10, marginBottom:14 }}>{msg}</div>}
-            {err && <div style={{ background:'#412426', border:'1px solid #a64b53', color:'#f0b8bc', padding:10, borderRadius:10, marginBottom:14 }}>{err}</div>}
+            {msg && <div style={{ background:'var(--success-bg)', border:'1px solid var(--success-border)', color:'var(--success-text)', padding:10, borderRadius:10, marginBottom:14 }}>{msg}</div>}
+            {err && <div style={{ background:'var(--error-bg)', border:'1px solid var(--error-border)', color:'var(--error-text)', padding:10, borderRadius:10, marginBottom:14 }}>{err}</div>}
             <div style={{ display:'grid', gap:28 }}>
+              {/* Appearance section */}
+              <div>
+                <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Appearance</div>
+                <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                  {['light','dark','system'].map(opt => (
+                    <label key={opt} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', border:`1px solid ${themePref===opt ? 'var(--accent)' : 'var(--border)'}`, borderRadius:8, cursor:'pointer', background: themePref===opt ? 'rgba(124,156,255,0.12)' : 'transparent', transition:'border-color .15s ease, background-color .15s ease' }}>
+                      <input type="radio" name="themePref" value={opt} checked={themePref===opt} onChange={(e)=> setThemePref && setThemePref(e.target.value)} />
+                      <span style={{ textTransform:'capitalize' }}>{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
               <div>
             <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Contact</div>
             <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Email</label>
-                <input value={user?.email || ''} disabled readOnly style={{ width:'100%', padding:10, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, color:'var(--muted)', marginBottom:12 }} />
+                <input value={user?.email || ''} disabled readOnly style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--muted)', marginBottom:12 }} />
             <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Mobile number</label>
             {mobileLocked ? (
               <input
                 value={mobile}
                 onChange={(e)=>setMobile(e.target.value)}
                 placeholder="e.g. +911234567890"
-                    style={{ width:'100%', padding:10, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, color:'var(--text)', marginBottom:12 }}
+                    style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12 }}
                 disabled
                 readOnly
               />
@@ -213,7 +225,7 @@ export default function ProfileModal({ open, onClose }) {
                 <select
                   value={countryDial}
                   onChange={(e)=>setCountryDial(e.target.value)}
-                      style={{ padding:10, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, color:'var(--text)', minWidth:110 }}
+                      style={{ padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', minWidth:110 }}
                 >
                   {COUNTRY_OPTIONS.map(opt => (
                     <option key={opt.code} value={opt.dial}>+{opt.dial} {opt.code}</option>
@@ -223,7 +235,7 @@ export default function ProfileModal({ open, onClose }) {
                   value={mobile}
                   onChange={(e)=>setMobile(e.target.value)}
                   placeholder="Enter mobile number"
-                      style={{ flex:1, padding:10, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, color:'var(--text)' }}
+                      style={{ flex:1, padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)' }}
                 />
               </div>
             )}
@@ -232,7 +244,7 @@ export default function ProfileModal({ open, onClose }) {
             )}
             {mobileLocked ? (
               <div style={{ marginTop:14, display:'flex', justifyContent:'center' }}>
-                    <button onClick={deleteMobileAndUnlock} disabled={saving} style={{ background:'none', border:'1px solid #a64b53', color:'#f36', padding:'10px 14px', borderRadius:8, fontWeight:700, cursor:'pointer' }}>Delete number and re-enter</button>
+                    <button onClick={deleteMobileAndUnlock} disabled={saving} style={{ background:'none', border:'1px solid #a64b53', color:'#f36', padding:'10px 14px', borderRadius:8, fontWeight:700, cursor:'pointer' }}>Delete my number</button>
               </div>
             ) : (
               <div style={{ marginTop:14, display:'flex', justifyContent:'center' }}>
@@ -240,22 +252,22 @@ export default function ProfileModal({ open, onClose }) {
               </div>
             )}
               </div>
-              <div style={{ borderTop:'1px solid #1f2b57', paddingTop:16 }}>
+              <div style={{ borderTop:'1px solid var(--border)', paddingTop:16 }}>
                 <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Security</div>
                 {user?.hasPassword ? (
                   <>
                     <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Current password</label>
-                    <input type="password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} placeholder="Current password" style={{ width:'100%', padding:10, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, color:'var(--text)', marginBottom:12 }} />
+                    <input type="password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} placeholder="Current password" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12 }} />
                   </>
                 ) : (
                   <div style={{ color:'var(--muted)', fontSize:12, marginBottom:8 }}>No password set (OAuth account). You can set a password below.</div>
                 )}
                 <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>New password</label>
-                <input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} placeholder="At least 6 characters" style={{ width:'100%', padding:10, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, color:'var(--text)', marginBottom:12 }} />
+                <input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} placeholder="At least 6 characters" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12 }} />
                 {!user?.hasPassword && (
                   <>
                     <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Confirm new password</label>
-                    <input type="password" value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} placeholder="Re-enter new password" style={{ width:'100%', padding:10, background:'#0f1530', border:'1px solid #1f2b57', borderRadius:8, color:'var(--text)', marginBottom:8 }} />
+                    <input type="password" value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} placeholder="Re-enter new password" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:8 }} />
                     {confirmPassword && confirmPassword !== newPassword && (
                       <div style={{ color:'#f36', fontSize:12, marginBottom:8 }}>Passwords do not match.</div>
                     )}
