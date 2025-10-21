@@ -27,13 +27,127 @@ export default function ChatTutor({
   const [typingText, setTypingText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const typingIntervalRef = useRef(null);
+  const [speakingMessageId, setSpeakingMessageId] = useState(null);
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
+  const [currentVoicePref, setCurrentVoicePref] = useState('');
+  const shouldAutoScrollRef = useRef(true); // Track if we should auto-scroll
+  const [userBubbleTheme, setUserBubbleTheme] = useState(localStorage.getItem('userBubbleTheme') || 'blue');
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
-  // Auto-scroll to bottom when messages change
+  // User bubble theme options (imported from localStorage)
+  const getBubbleTheme = () => {
+    const themes = {
+      // Gradient themes
+      purple: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      blue: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
+      green: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
+      orange: "linear-gradient(135deg, #f46b45 0%, #eea849 100%)",
+      pink: "linear-gradient(135deg, #e91e63 0%, #f06292 100%)",
+      teal: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+      red: "linear-gradient(135deg, #ee0979 0%, #ff6a00 100%)",
+      indigo: "linear-gradient(135deg, #5f72bd 0%, #9b23ea 100%)",
+      // Solid dark themes
+      slate: "#1e293b",
+      charcoal: "#2d3748",
+      navy: "#1a202c",
+      forest: "#1b3a2f",
+      burgundy: "#3e1f2a",
+      midnight: "#0f172a",
+    };
+    return themes[userBubbleTheme] || themes.blue;
+  };
+
+  // Initialize voice preference from localStorage
+  useEffect(() => {
+    const loadVoicePreference = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        const savedPref = localStorage.getItem('voicePreference');
+        if (savedPref && voices.find(v => v.name === savedPref)) {
+          setCurrentVoicePref(savedPref);
+        } else {
+          // Find Gini (Google Hindi) as default (best quality), then other good voices
+          const defaultVoice = voices.find(v => v.name === 'Google हिन्दी') ||
+            voices.find(v => v.name.includes('Google') && v.lang.startsWith('en')) ||
+            voices.find(v => v.name.includes('Microsoft Zira')) ||
+            voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female')) ||
+            voices.find(v => v.lang.startsWith('en')) ||
+            voices[0]; // Fallback to first available voice
+          
+          if (defaultVoice) {
+            setCurrentVoicePref(defaultVoice.name);
+            localStorage.setItem('voicePreference', defaultVoice.name);
+          }
+        }
+      }
+    };
+    
+    loadVoicePreference();
+    window.speechSynthesis.onvoiceschanged = loadVoicePreference;
+  }, []);
+
+  // Listen for voice preference changes
+  useEffect(() => {
+    const handleVoiceChange = (event) => {
+      setCurrentVoicePref(event.detail);
+    };
+    
+    const handleThemeChange = (event) => {
+      setUserBubbleTheme(event.detail);
+    };
+    
+    window.addEventListener('voicePreferenceChanged', handleVoiceChange);
+    window.addEventListener('userBubbleThemeChanged', handleThemeChange);
+    
+    return () => {
+      window.removeEventListener('voicePreferenceChanged', handleVoiceChange);
+      window.removeEventListener('userBubbleThemeChanged', handleThemeChange);
+    };
+  }, []);
+
+  // Auto-scroll to bottom when messages change (only if user is near bottom)
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      const container = chatContainerRef.current;
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      
+      // Auto-scroll if: 1) user is near bottom, OR 2) shouldAutoScrollRef is true (new message sent)
+      if (isNearBottom || shouldAutoScrollRef.current) {
+        container.scrollTop = container.scrollHeight;
+        shouldAutoScrollRef.current = false; // Reset after scrolling
+      }
+      // Update visibility of scroll-to-bottom button
+      setShowScrollToBottom(!isNearBottom);
     }
   }, [activeChat?.messages, loadingAsk, typingText]);
+
+  // Track scroll position to toggle scroll-to-bottom button
+  useEffect(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      setShowScrollToBottom(!isNearBottom);
+    };
+    el.addEventListener('scroll', onScroll);
+    // Initialize
+    onScroll();
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+    };
+  }, [activeChatId]);
+
+  const scrollToBottom = () => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    try {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } catch {
+      el.scrollTop = el.scrollHeight;
+    }
+    shouldAutoScrollRef.current = false;
+    setShowScrollToBottom(false);
+  };
 
   // Typewriter effect for tutor response
   const typeText = (text) => {
@@ -66,6 +180,19 @@ export default function ChatTutor({
     };
   }, []);
 
+  // Stop speech when chat changes or component unmounts
+  useEffect(() => {
+    // Cancel speech and clear state when switching chats
+    window.speechSynthesis.cancel();
+    setSpeakingMessageId(null);
+    
+    return () => {
+      // Also cleanup on unmount
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+    };
+  }, [activeChatId]);
+
   // Ask the tutor a question
   const onAsk = async () => {
     if (!question.trim()) return;
@@ -75,6 +202,7 @@ export default function ChatTutor({
     setCitations([]);
     setErrorMsg("");
     setLoadingAsk(true);
+    shouldAutoScrollRef.current = true; // Force scroll to bottom for new message
     
     try {
       let chatId = activeChatId;
@@ -211,23 +339,23 @@ export default function ChatTutor({
         </div>
       )}
       
-      {/* Chat display area */}
-      <div
-        ref={chatContainerRef}
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: "16px",
-          marginBottom: "12px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-          minHeight: 0,
-        }}
-      >
+      {/* Chat display area with scroll-to-bottom control */}
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <div
+          ref={chatContainerRef}
+          style={{
+            height: "100%",
+            overflowY: "auto",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            padding: "16px",
+            marginBottom: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+          }}
+        >
         {!activeChat?.messages?.length && !loadingAsk && (
           <div
             style={{
@@ -256,40 +384,47 @@ export default function ChatTutor({
               }}
             >
               <div
+                className="chat-message"
                 style={{
                   maxWidth: "75%",
-                  padding: "12px 16px",
-                  borderRadius: "18px",
-                  background: m.role === "user" ? "var(--accent)" : "var(--surface)",
-                  color: m.role === "user" ? "#0a0f25" : "var(--text)",
+                  padding: m.role === "user" ? "8px 14px" : "12px 16px",
+                  borderRadius: m.role === "user" ? "20px 20px 4px 20px" : "18px",
+                  background: m.role === "user" ? getBubbleTheme() : "var(--surface)",
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                  fontSize: "15px",
+                  boxShadow: m.role === "user" ? "0 2px 8px rgba(102, 126, 234, 0.3)" : "none",
+                  color: m.role === "user" ? "#ffffff" : "var(--text)",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    marginBottom: "4px",
-                    opacity: 0.8,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <span>{m.role === "user" ? "You" : "Gini"}</span>
-                  {isPlaceholder && (
-                    <span style={{
-                      fontSize: "10px",
-                      fontWeight: 500,
-                      padding: "2px 8px",
-                      borderRadius: "4px",
-                      background: "rgba(34, 197, 94, 0.15)",
-                      color: "#22c55e",
-                      border: "1px solid rgba(34, 197, 94, 0.3)",
-                    }}>
-                      Gini is thinking...
-                    </span>
-                  )}
-                </div>
+                {/* Only show label for Gini (tutor/assistant), not for user */}
+                {m.role !== "user" && (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      marginBottom: "4px",
+                      opacity: 0.8,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <span>Gini</span>
+                    {isPlaceholder && (
+                      <span style={{
+                        fontSize: "10px",
+                        fontWeight: 500,
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        background: "rgba(34, 197, 94, 0.15)",
+                        color: "#22c55e",
+                        border: "1px solid rgba(34, 197, 94, 0.3)",
+                      }}>
+                        Gini is thinking...
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div style={{ lineHeight: "1.6" }}>
                   {isPlaceholder ? (
                     <span style={{ opacity: 0.6, fontSize: "14px" }}>
@@ -383,22 +518,272 @@ export default function ChatTutor({
                       {showTyping && <span style={{ opacity: 0.5, animation: "blink 1s infinite", marginLeft: "2px" }}>▊</span>}
                     </>
                   ) : (
-                    <span style={{ whiteSpace: "pre-wrap" }}>{displayText}</span>
+                    <span style={{ 
+                      whiteSpace: "pre-wrap",
+                      fontWeight: 500,
+                      color: m.role === "user" ? "#ffffff" : "var(--text)",
+                      display: "block"
+                    }}>{displayText}</span>
                   )}
                 </div>
-                <div
-                  style={{
-                    fontSize: "10px",
-                    opacity: 0.6,
-                    marginTop: "4px",
-                  }}
-                >
-                  {new Date(m.createdAt).toLocaleTimeString()}
-                </div>
+                {/* Action buttons for Gini (tutor/assistant), not for user */}
+                {m.role !== "user" && !isPlaceholder && (
+                  <div
+                    style={{
+                      marginTop: "8px",
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                    }}
+                  >
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(m.text);
+                        setCopiedMessageId(idx);
+                        setTimeout(() => setCopiedMessageId(null), 2000);
+                      }}
+                      style={{
+                        background: copiedMessageId === idx ? "rgba(34, 197, 94, 0.15)" : "none",
+                        border: "1px solid",
+                        borderColor: copiedMessageId === idx ? "rgba(34, 197, 94, 0.4)" : "rgba(124, 156, 255, 0.2)",
+                        color: copiedMessageId === idx ? "#22c55e" : "var(--text)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "5px 10px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (copiedMessageId !== idx) {
+                          e.currentTarget.style.background = "rgba(124, 156, 255, 0.1)";
+                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.4)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (copiedMessageId !== idx) {
+                          e.currentTarget.style.background = "none";
+                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.2)";
+                        }
+                      }}
+                      title={copiedMessageId === idx ? "Copied!" : "Copy to clipboard"}
+                    >
+                      {copiedMessageId === idx ? (
+                        <>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                          Copy
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (speakingMessageId === idx) {
+                          // Stop speaking this message
+                          window.speechSynthesis.cancel();
+                          setSpeakingMessageId(null);
+                        } else {
+                          // Stop any currently speaking message first
+                          window.speechSynthesis.cancel();
+                          setSpeakingMessageId(null);
+                          
+                          // Small delay to ensure previous speech is fully stopped
+                          setTimeout(() => {
+                            // Check if speech synthesis is available
+                            if (!window.speechSynthesis) {
+                              console.error('Speech synthesis not supported');
+                              alert('Text-to-speech is not supported in your browser');
+                              return;
+                            }
+                            
+                            // Ensure voices are loaded
+                            let availableVoices = window.speechSynthesis.getVoices();
+                            if (availableVoices.length === 0) {
+                              console.error('No voices available');
+                              alert('Please wait for voices to load and try again');
+                              return;
+                            }
+                            
+                            // Set speaking state immediately for visual feedback
+                            setSpeakingMessageId(idx);
+                            
+                            // Strip markdown formatting for natural speech
+                            let cleanText = m.text
+                              .replace(/Gini/gi, 'Ginny') // Fix pronunciation (hard G like "gun")
+                              .replace(/#{1,6}\s+/g, '') // Remove markdown headers
+                              .replace(/\*\*(.+?)\*\*/g, '$1') // Remove bold
+                              .replace(/\*(.+?)\*/g, '$1') // Remove italic
+                              .replace(/\[(.+?)\]\(.+?\)/g, '$1') // Remove links, keep text
+                              .replace(/`(.+?)`/g, '$1') // Remove inline code
+                              .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+                              .replace(/>\s+/g, '') // Remove blockquotes
+                              .replace(/[-*+]\s+/g, '') // Remove list markers
+                              .replace(/\d+\.\s+/g, '') // Remove numbered list markers
+                              .replace(/\n+/g, '. ') // Replace newlines with pauses
+                              .trim();
+                            
+                            if (!cleanText) {
+                              console.error('No text to speak');
+                              setSpeakingMessageId(null);
+                              return;
+                            }
+                            
+                            const utterance = new SpeechSynthesisUtterance(cleanText);
+                            
+                            // Try to find the user's preferred voice first
+                            let selectedVoice = availableVoices.find(voice => voice.name === currentVoicePref);
+                            
+                            // If preferred voice not found, use fallback priority
+                            if (!selectedVoice) {
+                              selectedVoice = availableVoices.find(voice => voice.name === 'Google हिन्दी') ||
+                                availableVoices.find(voice => voice.name.includes('Google') && voice.lang.startsWith('en')) ||
+                                availableVoices.find(voice => voice.name.includes('Microsoft Zira')) ||
+                                availableVoices.find(voice => voice.name.includes('Karen')) ||
+                                availableVoices.find(voice => voice.name.includes('Victoria')) ||
+                                availableVoices.find(voice => voice.lang.startsWith('en') && voice.name.toLowerCase().includes('female')) ||
+                                availableVoices.find(voice => voice.lang.startsWith('en')) ||
+                                availableVoices[0];
+                            }
+                            
+                            if (selectedVoice) {
+                              utterance.voice = selectedVoice;
+                            }
+                            
+                            // Human-like speech settings
+                            utterance.rate = 0.9;
+                            utterance.pitch = 1.0;
+                            utterance.volume = 1.0;
+                            
+                            // Track speaking state with proper cleanup
+                            utterance.onstart = () => {
+                              console.log('✓ Speech started for message:', idx);
+                            };
+                            
+                            utterance.onend = () => {
+                              console.log('✓ Speech ended for message:', idx);
+                              setSpeakingMessageId(current => current === idx ? null : current);
+                            };
+                            
+                            utterance.onerror = (event) => {
+                              console.error('✗ Speech error:', event.error, event);
+                              setSpeakingMessageId(null);
+                            };
+                            
+                            // Ensure we're not in a paused state
+                            if (window.speechSynthesis.paused) {
+                              window.speechSynthesis.resume();
+                            }
+                            
+                            // Start speaking
+                            console.log('→ Starting speech for message:', idx, '| Voice:', selectedVoice?.name, '| Text length:', cleanText.length);
+                            try {
+                              window.speechSynthesis.speak(utterance);
+                            } catch (error) {
+                              console.error('✗ Failed to start speech:', error);
+                              setSpeakingMessageId(null);
+                              alert('Failed to start text-to-speech. Please try again.');
+                            }
+                          }, 100);
+                        }
+                      }}
+                      style={{
+                        background: speakingMessageId === idx ? "rgba(239, 68, 68, 0.15)" : "none",
+                        border: "1px solid",
+                        borderColor: speakingMessageId === idx ? "rgba(239, 68, 68, 0.4)" : "rgba(124, 156, 255, 0.2)",
+                        color: speakingMessageId === idx ? "#ef4444" : "var(--text)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "5px 10px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (speakingMessageId !== idx) {
+                          e.currentTarget.style.background = "rgba(124, 156, 255, 0.1)";
+                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.4)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (speakingMessageId !== idx) {
+                          e.currentTarget.style.background = "none";
+                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.2)";
+                        }
+                      }}
+                      title={speakingMessageId === idx ? "Stop reading" : "Read aloud"}
+                    >
+                      {speakingMessageId === idx ? (
+                        <>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+                            <rect x="6" y="4" width="4" height="16"></rect>
+                            <rect x="14" y="4" width="4" height="16"></rect>
+                          </svg>
+                          Stop
+                        </>
+                      ) : (
+                        <>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                          </svg>
+                          Read aloud
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
+        </div>
+        {showScrollToBottom && (
+          <button
+            onClick={scrollToBottom}
+            title="Scroll to latest"
+            style={{
+              position: "absolute",
+              left: "50%",
+              bottom: 22,
+              transform: "translateX(-50%)",
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "var(--btn-secondary-bg)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              boxShadow: "0 6px 16px rgba(0,0,0,0.22)",
+              cursor: "pointer",
+              transition: "transform 0.15s ease, background 0.2s ease",
+              padding: 0,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = "translate(-50%, -2px)")}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = "translate(-50%, 0)")}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Input area */}
@@ -423,7 +808,7 @@ export default function ChatTutor({
               padding: "12px",
               resize: "none",
               fontFamily: "inherit",
-              fontSize: "14px",
+              fontSize: "15px", 
             }}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}

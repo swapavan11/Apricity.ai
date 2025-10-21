@@ -20,6 +20,117 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
      { code: 'IN', dial: '91' }, { code: 'US', dial: '1' }, { code: 'GB', dial: '44' }, { code: 'CA', dial: '1' }, { code: 'AU', dial: '61' }, { code: 'SG', dial: '65' }, { code: 'DE', dial: '49' }, { code: 'FR', dial: '33' }, { code: 'ZA', dial: '27' }, { code: 'BR', dial: '55' }
   ];
 
+  // Voice preference
+  const [voicePref, setVoicePref] = useState(localStorage.getItem('voicePreference') || '');
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [testingSpeech, setTestingSpeech] = useState(false);
+
+  // Bubble theme preference
+  const [bubbleTheme, setBubbleTheme] = useState(localStorage.getItem('userBubbleTheme') || 'blue');
+  
+  const bubbleThemes = {
+    // Gradient themes
+    purple: { background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", name: "Purple Dream" },
+    blue: { background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)", name: "Ocean Blue" },
+    green: { background: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)", name: "Fresh Green" },
+    orange: { background: "linear-gradient(135deg, #f46b45 0%, #eea849 100%)", name: "Sunset Orange" },
+    pink: { background: "linear-gradient(135deg, #e91e63 0%, #f06292 100%)", name: "Pink Rose" },
+    teal: { background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)", name: "Cool Teal" },
+    red: { background: "linear-gradient(135deg, #ee0979 0%, #ff6a00 100%)", name: "Fiery Red" },
+    indigo: { background: "linear-gradient(135deg, #5f72bd 0%, #9b23ea 100%)", name: "Deep Indigo" },
+    // Solid dark themes
+    slate: { background: "#1e293b", name: "Slate Dark" },
+    charcoal: { background: "#2d3748", name: "Charcoal" },
+    navy: { background: "#1a202c", name: "Navy Dark" },
+    forest: { background: "#1b3a2f", name: "Forest Dark" },
+    burgundy: { background: "#3e1f2a", name: "Burgundy Dark" },
+    midnight: { background: "#0f172a", name: "Midnight" },
+  };
+
+  // Load available voices
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices);
+        
+        // If no preference set, or preference is invalid, find a good default
+        const savedPref = localStorage.getItem('voicePreference');
+        if (!savedPref || !voices.find(v => v.name === savedPref)) {
+          // Find Gini (Google Hindi) as default (best quality), then other good voices
+          const defaultVoice = voices.find(v => v.name === 'Google हिन्दी') ||
+            voices.find(v => v.name.includes('Google') && v.lang.startsWith('en')) ||
+            voices.find(v => v.name.includes('Microsoft Zira')) ||
+            voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female')) ||
+            voices.find(v => v.lang.startsWith('en')) ||
+            voices[0]; // Fallback to first available voice
+          
+          if (defaultVoice) {
+            setVoicePref(defaultVoice.name);
+            localStorage.setItem('voicePreference', defaultVoice.name);
+          }
+        } else {
+          setVoicePref(savedPref);
+        }
+      }
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    
+    // Cleanup: stop any speech when modal closes
+    return () => {
+      window.speechSynthesis.cancel();
+      setTestingSpeech(false);
+    };
+  }, []);
+
+  const handleVoiceChange = (voiceName) => {
+    setVoicePref(voiceName);
+    localStorage.setItem('voicePreference', voiceName);
+    
+    // Trigger a custom event so ChatTutor can update immediately
+    window.dispatchEvent(new CustomEvent('voicePreferenceChanged', { detail: voiceName }));
+  };
+
+  const handleBubbleThemeChange = (themeKey) => {
+    setBubbleTheme(themeKey);
+    localStorage.setItem('userBubbleTheme', themeKey);
+    
+    // Trigger a custom event so ChatTutor can update immediately
+    window.dispatchEvent(new CustomEvent('userBubbleThemeChanged', { detail: themeKey }));
+  };
+
+  const testVoice = () => {
+    if (testingSpeech) {
+      window.speechSynthesis.cancel();
+      setTestingSpeech(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    // Use phonetic spelling to get correct pronunciation (hard G like "gun")
+    const testText = "Hello! This is how I sound. I'm Ginny, your AI tutor, ready to help you learn.";
+    const utterance = new SpeechSynthesisUtterance(testText);
+    
+    const voices = window.speechSynthesis.getVoices();
+    const selectedVoice = voices.find(voice => voice.name === voicePref);
+    
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+    
+    // More human-like speech settings
+    utterance.rate = 0.9; // Slower, more conversational pace
+    utterance.pitch = 1.0; // Natural pitch
+    utterance.volume = 1.0; // Full volume
+    
+    utterance.onstart = () => setTestingSpeech(true);
+    utterance.onend = () => setTestingSpeech(false);
+    utterance.onerror = () => setTestingSpeech(false);
+    
+    window.speechSynthesis.speak(utterance);
+  };
+
   const buildE164 = (dial, number) => {
     const raw = (number || '').trim();
     if (!raw) return '';
@@ -204,6 +315,141 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
                       <span style={{ textTransform:'capitalize' }}>{opt}</span>
                     </label>
                   ))}
+                </div>
+              </div>
+              {/* Voice preference section */}
+              <div>
+                <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Voice Preference</div>
+                <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Select AI voice for Read Aloud</label>
+                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                  <select 
+                    value={voicePref} 
+                    onChange={(e) => handleVoiceChange(e.target.value)}
+                    style={{ flex:1, padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)' }}
+                  >
+                    {availableVoices.length === 0 ? (
+                      <option value="">Loading voices...</option>
+                    ) : (
+                      <>
+                        {/* Group English voices */}
+                        <optgroup label="English Voices">
+                          {availableVoices
+                            .filter(v => v.lang.startsWith('en'))
+                            .sort((a, b) => {
+                              // Prioritize certain voices at the top
+                              const priority = ['Google', 'Zira', 'Karen', 'Victoria', 'Female'];
+                              const aIndex = priority.findIndex(p => a.name.includes(p));
+                              const bIndex = priority.findIndex(p => b.name.includes(p));
+                              if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+                              if (aIndex !== -1) return -1;
+                              if (bIndex !== -1) return 1;
+                              return a.name.localeCompare(b.name);
+                            })
+                            .map(voice => (
+                              <option key={voice.name} value={voice.name}>
+                                {voice.name} ({voice.lang})
+                              </option>
+                            ))
+                          }
+                        </optgroup>
+                        {/* Show other language voices if available */}
+                        {availableVoices.filter(v => !v.lang.startsWith('en')).length > 0 && (
+                          <optgroup label="Other Languages">
+                            {availableVoices
+                              .filter(v => !v.lang.startsWith('en'))
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(voice => (
+                                <option key={voice.name} value={voice.name}>
+                                  {voice.name === 'Google हिन्दी' ? 'गिनी (Gini)' : voice.name} ({voice.lang})
+                                </option>
+                              ))
+                            }
+                          </optgroup>
+                        )}
+                      </>
+                    )}
+                  </select>
+                  <button
+                    onClick={testVoice}
+                    disabled={!voicePref || availableVoices.length === 0}
+                    title={testingSpeech ? "Stop" : "Test voice"}
+                    style={{
+                      background: testingSpeech ? "rgba(239, 68, 68, 0.15)" : "var(--input-bg)",
+                      border: "1px solid",
+                      borderColor: testingSpeech ? "rgba(239, 68, 68, 0.4)" : "var(--border)",
+                      color: testingSpeech ? "#ef4444" : "var(--text)",
+                      padding: "10px 14px",
+                      borderRadius: 8,
+                      cursor: (!voicePref || availableVoices.length === 0) ? "not-allowed" : "pointer",
+                      opacity: (!voicePref || availableVoices.length === 0) ? 0.5 : 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    {testingSpeech ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16"></rect>
+                        <rect x="14" y="4" width="4" height="16"></rect>
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                <div style={{ color:'var(--muted)', fontSize:11, marginTop:6 }}>
+                  {voicePref ? (
+                    <>Currently using: <strong style={{ color:'var(--text)' }}>
+                      {voicePref === 'Google हिन्दी' ? 'गिनी (Gini)' : voicePref}
+                    </strong></>
+                  ) : (
+                    'Select a voice and click the speaker to test'
+                  )}
+                </div>
+              </div>
+              {/* Message Bubble Theme section */}
+              <div>
+                <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Message Bubble Theme</div>
+                <label style={{ display:'block', color:'var(--muted)', marginBottom:10, fontSize:12 }}>Choose your message bubble appearance</label>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:8 }}>
+                  {Object.entries(bubbleThemes).map(([key, theme]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleBubbleThemeChange(key)}
+                      title={theme.name}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: '50%',
+                        background: theme.background,
+                        border: bubbleTheme === key ? '3px solid var(--accent)' : '2px solid var(--border)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: bubbleTheme === key ? '0 0 0 2px var(--panel), 0 0 12px rgba(124, 156, 255, 0.5)' : 'none',
+                        transform: bubbleTheme === key ? 'scale(1.15)' : 'scale(1)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (bubbleTheme !== key) {
+                          e.currentTarget.style.transform = 'scale(1.1)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (bubbleTheme !== key) {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+                <div style={{ color:'var(--muted)', fontSize:11 }}>
+                  Selected: <strong style={{ color:'var(--text)' }}>{bubbleThemes[bubbleTheme].name}</strong>
                 </div>
               </div>
               <div>

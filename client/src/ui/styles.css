@@ -210,6 +210,12 @@ input[type="radio"]:disabled {
   animation: slideIn 0.3s ease-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .chat-message {
+    animation: none !important;
+  }
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;

@@ -9,7 +9,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
   // Generate personalized welcome message
   const getWelcomeMessage = () => {
     const userName = user?.name || 'there';
-    return `<p>Hi ${userName} from Swapnil! 👋 Start taking notes here...</p>`;
+    return `<p>Hii from Swapnil 👋! <br> Welcome ${userName}! 📝Start taking notes here...</p>`;
   };
   
   const [title, setTitle] = useState(initialTitle);

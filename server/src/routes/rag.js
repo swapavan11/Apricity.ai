@@ -12,8 +12,21 @@ router.get('/chats', authenticateToken, async (req, res) => {
   const { documentId } = req.query;
   const q = { userId: req.user._id };
   if (documentId) q.documentId = documentId;
-  const chats = await Chat.find(q).select('title documentId updatedAt createdAt').sort({ updatedAt: -1 });
-  res.json({ chats });
+  
+  // Find chats and filter out those with empty messages
+  const allChats = await Chat.find(q).select('title documentId updatedAt createdAt messages').sort({ updatedAt: -1 });
+  const chats = allChats.filter(chat => chat.messages && chat.messages.length > 0);
+  
+  // Return chats without the messages field (keep it lightweight)
+  const chatsResponse = chats.map(chat => ({
+    _id: chat._id,
+    title: chat.title,
+    documentId: chat.documentId,
+    updatedAt: chat.updatedAt,
+    createdAt: chat.createdAt
+  }));
+  
+  res.json({ chats: chatsResponse });
 });
 
 router.get('/chats/:id', authenticateToken, async (req, res) => {
@@ -80,7 +93,23 @@ router.post('/ask', authenticateToken, async (req, res) => {
   // If documentId is explicitly null or "all", use general knowledge (no PDF)
   if (!documentId || documentId === 'all') {
     console.log('General chat mode - no PDF selected');
-    const system = 'You are Gini, a knowledgeable and friendly AI tutor. Provide comprehensive, well-researched answers to questions. Be detailed, accurate, and educational. Use examples and explain concepts clearly. If asked about specific topics, provide in-depth explanations with relevant context.';
+    const system = `You are Gini (pronounced with a hard G like "gun", not like "genie"), an AI tutor created for QuizHive.ai by Swapavan. 
+
+QuizHive.ai is an intelligent learning platform that helps students study effectively using AI-powered tools. The platform was developed by Swapavan, a passionate developer dedicated to revolutionizing education through technology.
+
+When asked about yourself:
+- You are Gini, the AI tutor of QuizHive.ai
+- You were created and designed by Swapavan
+- You are part of QuizHive.ai, an AI-powered learning platform
+- Your purpose is to help students learn effectively through personalized tutoring
+
+Your capabilities:
+- Answer questions on any topic with comprehensive, well-researched responses
+- Help students understand complex concepts with clear explanations
+- Provide examples and context to enhance learning
+- Be detailed, accurate, and educational in your responses
+
+Always be friendly, encouraging, and patient with students. Use examples and explain concepts clearly.`;
     const prompt = `Question: ${query}`;
     const answer = await generateText({ prompt, system });
     
@@ -170,13 +199,17 @@ router.post('/ask', authenticateToken, async (req, res) => {
   // Lower the threshold to be more inclusive of PDF content
   if (avgScore < 0.005 && allowGeneral) {
     // Score is too low, use general knowledge with context that user has a PDF
-    const system = 'You are Gini, a knowledgeable AI tutor. The user has a PDF document but your question doesn\'t seem directly related to it. Provide a comprehensive, well-researched answer to their general question. Be detailed and educational.';
+    const system = `You are Gini (pronounced with a hard G like "gun"), an AI tutor created for QuizHive.ai by Swapavan. The user has a PDF document but their question doesn't seem directly related to it. Provide a comprehensive, well-researched answer to their general question. Be detailed and educational.
+
+When asked about yourself: You are Gini from QuizHive.ai, created by Swapavan to help students learn effectively.`;
     const prompt = `Question: ${query}`;
     answer = await generateText({ prompt, system });
     console.log('Using general knowledge (low score):', avgScore);
   } else {
     // Use PDF content - be comprehensive and detailed
-    const system = 'You are Gini, a helpful AI tutor analyzing PDF documents. Provide a comprehensive, detailed answer based on the citations from the PDF. Reference page numbers naturally in your text like "According to the document (Page X)..." or "As mentioned on Page X...". Be thorough in your explanation - use all relevant information from the citations to give a complete answer. If the citations contain related information, include it to provide full context. Structure your response clearly and make it educational. Do NOT include document titles in your citations - ONLY use simple page number references like (Page 5).';
+    const system = `You are Gini (pronounced with a hard G like "gun"), a helpful AI tutor from QuizHive.ai created by Swapavan, analyzing PDF documents. Provide a comprehensive, detailed answer based on the citations from the PDF. Reference page numbers naturally in your text like "According to the document (Page X)..." or "As mentioned on Page X...". Be thorough in your explanation - use all relevant information from the citations to give a complete answer. If the citations contain related information, include it to provide full context. Structure your response clearly and make it educational. Do NOT include document titles in your citations - ONLY use simple page number references like (Page 5).
+
+When asked about yourself: You are Gini from QuizHive.ai, created by Swapavan to help students learn effectively.`;
     const prompt = `Question: ${query}\n\nRelevant content from the PDF:\n${citationText}\n\nProvide a detailed, well-explained answer using the content from the PDF. Reference page numbers naturally in your text using simple format like (Page 5) or "on Page 5" - do NOT include document titles in citations. Be comprehensive in your explanation.`;
     answer = await generateText({ prompt, system });
     console.log('Using PDF content (score):', avgScore);
