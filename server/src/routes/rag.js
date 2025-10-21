@@ -76,8 +76,39 @@ function lexicalScore(a, b) {
 router.post('/ask', authenticateToken, async (req, res) => {
   const { query, documentId, allowGeneral = true, chatId, createIfMissing } = req.body;
   if (!query) return res.status(400).json({ error: 'query required' });
-  // Only search documents belonging to the requesting user unless a specific
-  // documentId is provided; even then ensure ownership.
+  
+  // If documentId is explicitly null or "all", use general knowledge (no PDF)
+  if (!documentId || documentId === 'all') {
+    console.log('General chat mode - no PDF selected');
+    const system = 'You are Gini, a knowledgeable and friendly AI tutor. Provide comprehensive, well-researched answers to questions. Be detailed, accurate, and educational. Use examples and explain concepts clearly. If asked about specific topics, provide in-depth explanations with relevant context.';
+    const prompt = `Question: ${query}`;
+    const answer = await generateText({ prompt, system });
+    
+    // Persist to chat history if chatId provided
+    let chat = null;
+    if (chatId) {
+      chat = await Chat.findById(chatId);
+      if (chat && chat.userId.toString() === req.user._id.toString()) {
+        chat.messages.push({ role: 'user', text: query, citations: [], createdAt: new Date() });
+        chat.messages.push({ role: 'assistant', text: answer, citations: [], createdAt: new Date() });
+        await chat.save();
+      }
+    } else if (createIfMissing) {
+      chat = await Chat.create({ 
+        documentId: null, 
+        title: 'General Chat', 
+        messages: [
+          { role: 'user', text: query, citations: [], createdAt: new Date() },
+          { role: 'assistant', text: answer, citations: [], createdAt: new Date() }
+        ],
+        userId: req.user._id 
+      });
+    }
+    
+    return res.json({ answer, citations: [], usedGeneral: true, chatId: chat?._id || chatId || null });
+  }
+  
+  // Only search documents belonging to the requesting user
   let docs = [];
   if (documentId) {
     const d = await Document.findById(documentId);
@@ -86,9 +117,8 @@ router.post('/ask', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied to document' });
     }
     docs = [d];
-  } else {
-    docs = await Document.find({ uploadedBy: req.user._id });
   }
+  
   if (!docs.length) {
     return res.json({ answer: "No documents found. Please upload a PDF first.", citations: [], usedGeneral: true });
   }
@@ -139,15 +169,15 @@ router.post('/ask', authenticateToken, async (req, res) => {
   // Use PDF content if we have any relevant citations with decent scores
   // Lower the threshold to be more inclusive of PDF content
   if (avgScore < 0.005 && allowGeneral) {
-    // Score is too low, use general knowledge
-    const system = 'You are a knowledgeable tutor. Provide a concise, accurate answer even if no citations are present. If the question is vague, ask a clarifying follow-up.';
+    // Score is too low, use general knowledge with context that user has a PDF
+    const system = 'You are Gini, a knowledgeable AI tutor. The user has a PDF document but your question doesn\'t seem directly related to it. Provide a comprehensive, well-researched answer to their general question. Be detailed and educational.';
     const prompt = `Question: ${query}`;
     answer = await generateText({ prompt, system });
     console.log('Using general knowledge (low score):', avgScore);
   } else {
-    // Use PDF content - be more aggressive about using uploaded content
-    const system = 'You are a helpful tutor. Answer using the provided citations from the PDFs. Always reference the page numbers and document titles. Be comprehensive and detailed. If the citations don\'t fully answer the question, provide what information you can from the documents and explain what might be missing.';
-    const prompt = `Question: ${query}\n\nRelevant content from PDFs:\n${citationText}\n\nAnswer based on the provided content from the PDFs, citing page numbers like (p. X from "${docs[0]?.title || 'document'}"). Use the PDF content as your primary source.`;
+    // Use PDF content - be comprehensive and detailed
+    const system = 'You are Gini, a helpful AI tutor analyzing PDF documents. Provide a comprehensive, detailed answer based on the citations from the PDF. Reference page numbers naturally in your text like "According to the document (Page X)..." or "As mentioned on Page X...". Be thorough in your explanation - use all relevant information from the citations to give a complete answer. If the citations contain related information, include it to provide full context. Structure your response clearly and make it educational. Do NOT include document titles in your citations - ONLY use simple page number references like (Page 5).';
+    const prompt = `Question: ${query}\n\nRelevant content from the PDF:\n${citationText}\n\nProvide a detailed, well-explained answer using the content from the PDF. Reference page numbers naturally in your text using simple format like (Page 5) or "on Page 5" - do NOT include document titles in citations. Be comprehensive in your explanation.`;
     answer = await generateText({ prompt, system });
     console.log('Using PDF content (score):', avgScore);
   }

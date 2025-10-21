@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function ChatTutor({
   api,
@@ -131,36 +133,35 @@ export default function ChatTutor({
       setAnswer("");
       setCitations([]);
 
-      // Add tutor message and start typing animation immediately
+      // Add tutor message with full text immediately (for typing animation)
       if (res.answer) {
         const tutorMessage = {
           role: "tutor",
-          text: "",
+          text: res.answer, // Store the full answer
           createdAt: new Date().toISOString(),
-          citations: res.citations || []
+          citations: res.citations || [],
+          _fullText: res.answer // Keep original for reference
         };
         
-        setActiveChat({
+        // Update active chat with the complete message
+        const updatedChat = {
           ...optimisticChat,
           messages: [...optimisticChat.messages, tutorMessage]
-        });
+        };
+        setActiveChat(updatedChat);
         
         // Start typing animation with no delay
         requestAnimationFrame(() => {
           typeText(res.answer);
         });
-      }
-
-      // Refresh chat to get complete conversation from server after typing finishes
-      const typingDuration = res.answer ? res.answer.length * 2 : 0;
-      setTimeout(async () => {
-        if (chatId) {
-          const chatData = await api.getChat(chatId);
-          setActiveChat(chatData);
-          setTypingText(""); // Clear typing state
+        
+        // After typing finishes, just clear typing state (don't refresh from server)
+        const typingDuration = res.answer.length * 2;
+        setTimeout(() => {
+          setTypingText("");
           setIsTyping(false);
-        }
-      }, typingDuration + 100);
+        }, typingDuration + 100);
+      }
 
       // Refresh chat list to update timestamps
       const lst = await api.listChats(selected === "all" ? null : selected);
@@ -188,6 +189,28 @@ export default function ChatTutor({
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Warning banner when no PDF selected */}
+      {selected === "all" && (
+        <div style={{
+          background: "rgba(234, 179, 8, 0.15)",
+          border: "1px solid rgba(234, 179, 8, 0.4)",
+          borderRadius: "8px",
+          padding: "10px 14px",
+          marginBottom: "12px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          fontSize: "13px",
+          color: "#eab308",
+        }}>
+          <span style={{ fontSize: "16px" }}>💡</span>
+          <span>
+            <strong>General Chat Mode:</strong> I'm ready for general questions. 
+            Want to discuss a specific PDF? Select one from above!
+          </span>
+        </div>
+      )}
+      
       {/* Chat display area */}
       <div
         ref={chatContainerRef}
@@ -219,7 +242,7 @@ export default function ChatTutor({
 
         {activeChat?.messages?.map((m, idx) => {
           const isLastMessage = idx === activeChat.messages.length - 1;
-          const showTyping = isLastMessage && m.role === "tutor" && isTyping;
+          const showTyping = isLastMessage && (m.role === "tutor" || m.role === "assistant") && isTyping;
           const displayText = showTyping ? typingText : m.text;
           const isPlaceholder = m.isPlaceholder && !displayText;
           
@@ -267,18 +290,100 @@ export default function ChatTutor({
                     </span>
                   )}
                 </div>
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.4" }}>
+                <div style={{ lineHeight: "1.6" }}>
                   {isPlaceholder ? (
                     <span style={{ opacity: 0.6, fontSize: "14px" }}>
                       <span style={{ animation: "blink 0.8s infinite" }}>●</span>
                       <span style={{ animation: "blink 0.8s infinite 0.2s" }}>●</span>
                       <span style={{ animation: "blink 0.8s infinite 0.4s" }}>●</span>
                     </span>
-                  ) : (
+                  ) : (m.role === "tutor" || m.role === "assistant") ? (
                     <>
-                      {displayText}
-                      {showTyping && <span style={{ opacity: 0.5, animation: "blink 1s infinite" }}>▊</span>}
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          // Style markdown elements to match chat theme
+                          p: ({node, children, ...props}) => {
+                            // Convert page references to clickable badges
+                            const processChildren = (children) => {
+                              if (typeof children === 'string') {
+                                // Match patterns like (Page 5) or "Page 5" or "on Page 5"
+                                const parts = children.split(/(\(Page \d+\)|Page \d+)/gi);
+                                return parts.map((part, idx) => {
+                                  const match = part.match(/Page (\d+)/i);
+                                  if (match) {
+                                    const pageNum = match[1];
+                                    return (
+                                      <span
+                                        key={idx}
+                                        style={{
+                                          display: "inline-block",
+                                          padding: "1px 6px",
+                                          margin: "0 2px",
+                                          fontSize: "0.75em",
+                                          fontWeight: 500,
+                                          borderRadius: "3px",
+                                          background: "rgba(124, 156, 255, 0.08)",
+                                          color: "var(--text)",
+                                          border: "1px solid rgba(124, 156, 255, 0.2)",
+                                          cursor: "pointer",
+                                          transition: "all 0.2s",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.target.style.background = "rgba(124, 156, 255, 0.15)";
+                                          e.target.style.borderColor = "var(--accent)";
+                                          e.target.style.color = "var(--accent)";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.target.style.background = "rgba(124, 156, 255, 0.08)";
+                                          e.target.style.borderColor = "rgba(124, 156, 255, 0.2)";
+                                          e.target.style.color = "var(--text)";
+                                        }}
+                                        onClick={() => console.log("Page clicked:", pageNum)}
+                                        title={`Jump to Page ${pageNum}`}
+                                      >
+                                        {pageNum}
+                                      </span>
+                                    );
+                                  }
+                                  return part;
+                                });
+                              }
+                              return children;
+                            };
+                            
+                            return (
+                              <p style={{ margin: "0.5em 0", lineHeight: "1.6" }} {...props}>
+                                {React.Children.map(children, child => 
+                                  typeof child === 'string' ? processChildren(child) : child
+                                )}
+                              </p>
+                            );
+                          },
+                          h1: ({node, ...props}) => <h1 style={{ fontSize: "1.4em", marginTop: "0.5em", marginBottom: "0.3em" }} {...props} />,
+                          h2: ({node, ...props}) => <h2 style={{ fontSize: "1.3em", marginTop: "0.5em", marginBottom: "0.3em" }} {...props} />,
+                          h3: ({node, ...props}) => <h3 style={{ fontSize: "1.2em", marginTop: "0.5em", marginBottom: "0.3em" }} {...props} />,
+                          ul: ({node, ...props}) => <ul style={{ marginLeft: "1.2em", marginTop: "0.3em", marginBottom: "0.3em" }} {...props} />,
+                          ol: ({node, ...props}) => <ol style={{ marginLeft: "1.2em", marginTop: "0.3em", marginBottom: "0.3em" }} {...props} />,
+                          li: ({node, ...props}) => <li style={{ margin: "0.2em 0" }} {...props} />,
+                          code: ({node, inline, ...props}) => inline ? 
+                            <code style={{ background: "rgba(124, 156, 255, 0.15)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.9em" }} {...props} /> :
+                            <code style={{ display: "block", background: "rgba(124, 156, 255, 0.1)", padding: "10px", borderRadius: "6px", overflow: "auto", fontSize: "0.85em", marginTop: "0.5em", marginBottom: "0.5em" }} {...props} />,
+                          blockquote: ({node, ...props}) => <blockquote style={{ borderLeft: "3px solid var(--accent)", paddingLeft: "12px", marginLeft: "0", opacity: 0.9, fontStyle: "italic" }} {...props} />,
+                          strong: ({node, ...props}) => <strong style={{ fontWeight: 700 }} {...props} />,
+                          em: ({node, ...props}) => <em style={{ fontStyle: "italic" }} {...props} />,
+                          a: ({node, ...props}) => <a style={{ color: "var(--accent)", textDecoration: "underline" }} {...props} />,
+                          table: ({node, ...props}) => <table style={{ borderCollapse: "collapse", width: "100%", marginTop: "0.5em", marginBottom: "0.5em" }} {...props} />,
+                          th: ({node, ...props}) => <th style={{ border: "1px solid var(--border)", padding: "8px", background: "rgba(124, 156, 255, 0.1)" }} {...props} />,
+                          td: ({node, ...props}) => <td style={{ border: "1px solid var(--border)", padding: "8px" }} {...props} />,
+                        }}
+                      >
+                        {showTyping ? typingText : m.text}
+                      </ReactMarkdown>
+                      {showTyping && <span style={{ opacity: 0.5, animation: "blink 1s infinite", marginLeft: "2px" }}>▊</span>}
                     </>
+                  ) : (
+                    <span style={{ whiteSpace: "pre-wrap" }}>{displayText}</span>
                   )}
                 </div>
                 <div
