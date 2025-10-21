@@ -8,7 +8,16 @@ import Note from '../models/Note.js';
 const router = express.Router();
 
 // In-memory storage only; no disk writes
-const upload = multer({ storage: multer.memoryStorage() });
+// Increased limits for noteJson field with base64-encoded images
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fieldSize: 50 * 1024 * 1024, // 50MB for fields (noteJson with base64 images)
+    fileSize: 10 * 1024 * 1024,  // 10MB for file uploads
+    fields: 20,                   // Max number of non-file fields
+    files: 5                      // Max number of file fields
+  }
+});
 
 // Save a note (autosave). Accepts fields:
 // - title (string)
