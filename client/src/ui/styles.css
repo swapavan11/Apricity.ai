@@ -210,8 +210,27 @@ input[type="radio"]:disabled {
   animation: slideIn 0.3s ease-out;
 }
 
+/* User message: slide in from right-top for a snappy feel */
+.chat-message-user {
+  animation: slideInRight 0.25s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translate(14px, -8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-message {
+    animation: none !important;
+  }
+  .chat-message-user {
     animation: none !important;
   }
 }

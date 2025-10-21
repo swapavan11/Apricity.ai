@@ -33,6 +33,8 @@ export default function ChatTutor({
   const shouldAutoScrollRef = useRef(true); // Track if we should auto-scroll
   const [userBubbleTheme, setUserBubbleTheme] = useState(localStorage.getItem('userBubbleTheme') || 'blue');
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const messageRefs = useRef([]); // refs to message elements
+  const lastUserMessageIndexRef = useRef(null); // Track the last user message to anchor to
 
   // User bubble theme options (imported from localStorage)
   const getBubbleTheme = () => {
@@ -105,21 +107,14 @@ export default function ChatTutor({
     };
   }, []);
 
-  // Auto-scroll to bottom when messages change (only if user is near bottom)
+  // Only update scroll-to-bottom button visibility (no auto-scroll during typing)
   useEffect(() => {
     if (chatContainerRef.current) {
       const container = chatContainerRef.current;
       const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      
-      // Auto-scroll if: 1) user is near bottom, OR 2) shouldAutoScrollRef is true (new message sent)
-      if (isNearBottom || shouldAutoScrollRef.current) {
-        container.scrollTop = container.scrollHeight;
-        shouldAutoScrollRef.current = false; // Reset after scrolling
-      }
-      // Update visibility of scroll-to-bottom button
       setShowScrollToBottom(!isNearBottom);
     }
-  }, [activeChat?.messages, loadingAsk, typingText]);
+  }, [activeChat?.messages, loadingAsk, isTyping]);
 
   // Track scroll position to toggle scroll-to-bottom button
   useEffect(() => {
@@ -128,6 +123,23 @@ export default function ChatTutor({
     const onScroll = () => {
       const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
       setShowScrollToBottom(!isNearBottom);
+      
+      // If user manually scrolls, release the anchor
+      // (Only release if they scroll away significantly from the anchored position)
+      if (lastUserMessageIndexRef.current !== null) {
+        const userMessageEl = messageRefs.current[lastUserMessageIndexRef.current];
+        if (userMessageEl) {
+          const containerRect = el.getBoundingClientRect();
+          const messageRect = userMessageEl.getBoundingClientRect();
+          const currentOffset = messageRect.top - containerRect.top;
+          const targetOffsetFromTop = 80;
+          
+          // If user scrolled more than 150px away from anchor point, release it
+          if (Math.abs(currentOffset - targetOffsetFromTop) > 150) {
+            lastUserMessageIndexRef.current = null;
+          }
+        }
+      }
     };
     el.addEventListener('scroll', onScroll);
     // Initialize
@@ -140,6 +152,8 @@ export default function ChatTutor({
   const scrollToBottom = () => {
     const el = chatContainerRef.current;
     if (!el) return;
+    // Release the anchor when manually scrolling to bottom
+    lastUserMessageIndexRef.current = null;
     try {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     } catch {
@@ -185,6 +199,10 @@ export default function ChatTutor({
     // Cancel speech and clear state when switching chats
     window.speechSynthesis.cancel();
     setSpeakingMessageId(null);
+    // reset message refs on chat switch
+    messageRefs.current = [];
+    // reset anchor when switching chats
+    lastUserMessageIndexRef.current = null;
     
     return () => {
       // Also cleanup on unmount
@@ -202,7 +220,8 @@ export default function ChatTutor({
     setCitations([]);
     setErrorMsg("");
     setLoadingAsk(true);
-    shouldAutoScrollRef.current = true; // Force scroll to bottom for new message
+    // Don't force auto-scroll; we'll anchor the view to the new user message near the top
+    shouldAutoScrollRef.current = false;
     
     try {
       let chatId = activeChatId;
@@ -235,16 +254,39 @@ export default function ChatTutor({
           { role: "user", text: userQuestion, createdAt: new Date().toISOString(), citations: [] }
         ]
       };
+      
+      // Store the index of this user message for anchoring
+      const userMessageIndex = optimisticChat.messages.length - 1;
+      lastUserMessageIndexRef.current = userMessageIndex;
+      
       setActiveChat(optimisticChat);
 
       // Add placeholder tutor message immediately to reduce perceived delay
-      setActiveChat({
+      const chatWithPlaceholder = {
         ...optimisticChat,
         messages: [
           ...optimisticChat.messages,
           { role: "tutor", text: "", createdAt: new Date().toISOString(), citations: [], isPlaceholder: true }
         ]
-      });
+      };
+      setActiveChat(chatWithPlaceholder);
+
+      // After DOM commits, anchor scroll so the new user message appears near top-right (ChatGPT style)
+      setTimeout(() => {
+        const container = chatContainerRef.current;
+        const userMessageEl = messageRefs.current[userMessageIndex];
+        
+        if (container && userMessageEl) {
+          const containerRect = container.getBoundingClientRect();
+          const messageRect = userMessageEl.getBoundingClientRect();
+          
+          // Calculate how much to scroll to position user message near top (80px from top for breathing room)
+          const targetOffsetFromTop = 80;
+          const scrollDelta = messageRect.top - containerRect.top - targetOffsetFromTop;
+          
+          container.scrollTop += scrollDelta;
+        }
+      }, 50); // Small delay to ensure DOM has updated
 
       const res = await api.ask(
         userQuestion,
@@ -283,11 +325,19 @@ export default function ChatTutor({
           typeText(res.answer);
         });
         
-        // After typing finishes, just clear typing state (don't refresh from server)
+        // After typing finishes, clear typing state and scroll to bottom
         const typingDuration = res.answer.length * 2;
         setTimeout(() => {
           setTypingText("");
           setIsTyping(false);
+          // Scroll to bottom after response is fully rendered
+          if (chatContainerRef.current) {
+            requestAnimationFrame(() => {
+              chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            });
+          }
+          // Release the anchor after response is complete
+          lastUserMessageIndexRef.current = null;
         }, typingDuration + 100);
       }
 
@@ -377,6 +427,7 @@ export default function ChatTutor({
           return (
             <div
               key={idx}
+              ref={(el) => (messageRefs.current[idx] = el)}
               style={{
                 display: "flex",
                 justifyContent: m.role === "user" ? "flex-end" : "flex-start",
@@ -384,7 +435,7 @@ export default function ChatTutor({
               }}
             >
               <div
-                className="chat-message"
+                className={`chat-message ${m.role === "user" ? "chat-message-user" : "chat-message-assistant"}`}
                 style={{
                   maxWidth: "75%",
                   padding: m.role === "user" ? "8px 14px" : "12px 16px",

@@ -59,11 +59,19 @@ if (!apiKey) {
 // --- Initialize Client ---
 const genAI = new GoogleGenerativeAI(apiKey);
 
+// --- Model Configuration ---
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const FALLBACK_MODELS = [ 
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+];
+
 /**
  * Get a Gemini model instance.
  * @param {string} model - Model name (default: gemini-1.5-flash)
  */
-export function getGemini(model = "gemini-2.5-flash") {
+export function getGemini(model = DEFAULT_MODEL) {
   return genAI.getGenerativeModel({ model });
 }
 
@@ -93,8 +101,9 @@ async function withRetry(fn, { attempts = 3, baseDelayMs = 500 }) {
   throw lastErr;
 }
 
-export async function generateText({ prompt, system, model = "gemini-2.5-flash", temperature = 0.2 }) {
-  const modelsToTry = [model, "gemini-2.5-flash-latest", "gemini-2.5-flash"];
+export async function generateText({ prompt, system, model = DEFAULT_MODEL, temperature = 0.2 }) {
+  // Build unique, ordered candidate list (env/param first, then fallbacks)
+  const modelsToTry = Array.from(new Set([model, ...FALLBACK_MODELS])).filter(Boolean);
   for (const mName of modelsToTry) {
     try {
       const m = getGemini(mName);
@@ -107,7 +116,9 @@ export async function generateText({ prompt, system, model = "gemini-2.5-flash",
       const text = response?.text?.() || "";
       if (text) return text;
     } catch (err) {
-      console.warn(`Model ${mName} failed, trying next:`, err?.status || err?.message || err);
+      const status = err?.status || err?.statusCode || "?";
+      const code = err?.error?.code || err?.code || "";
+      console.warn(`Model ${mName} failed [status ${status}${code ? ", code " + code : ""}], trying next`);
       continue;
     }
   }
