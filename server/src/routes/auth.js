@@ -287,17 +287,61 @@ router.put('/profile', authenticateToken, async (req, res) => {
     if (name) updateDoc.$set.name = name;
     if (preferences) updateDoc.$set.preferences = { ...req.user.preferences, ...preferences };
 
-    // Handle mobile update with uniqueness check
+    // Handle mobile update with history tracking
     if (typeof mobile !== 'undefined' && mobile !== req.user.mobile) {
       const trimmed = typeof mobile === 'string' ? mobile.trim() : mobile;
+      
+      // If user had a previous mobile number, add it to history before updating
+      if (req.user.mobile) {
+        const existingHistoryEntry = req.user.mobileHistory?.find(
+          entry => entry.number === req.user.mobile && !entry.removedAt
+        );
+        
+        if (!existingHistoryEntry) {
+          // Add current mobile to history as removed
+          if (!updateDoc.$push) updateDoc.$push = {};
+          updateDoc.$push.mobileHistory = {
+            number: req.user.mobile,
+            addedAt: req.user.updatedAt || new Date(),
+            removedAt: new Date(),
+            wasVerified: req.user.isMobileVerified || false
+          };
+        } else {
+          // Update existing entry to mark as removed
+          const user = await User.findById(req.user._id);
+          const historyEntry = user.mobileHistory.find(
+            entry => entry.number === req.user.mobile && !entry.removedAt
+          );
+          if (historyEntry) {
+            historyEntry.removedAt = new Date();
+            await user.save();
+          }
+        }
+      }
+      
       if (trimmed) {
+        // Check if new mobile is already in use by another user
         const exists = await User.findOne({ _id: { $ne: req.user._id }, mobile: String(trimmed) });
         if (exists) {
           return res.status(409).json({ success: false, message: 'Mobile number already registered' });
         }
         updateDoc.$set.mobile = String(trimmed);
+        updateDoc.$set.isMobileVerified = false; // Reset verification for new number
+        
+        // Add new mobile to history as active
+        if (!updateDoc.$push) updateDoc.$push = {};
+        if (!updateDoc.$push.mobileHistory) {
+          updateDoc.$push.mobileHistory = {
+            number: String(trimmed),
+            addedAt: new Date(),
+            removedAt: null,
+            wasVerified: false
+          };
+        }
       } else {
-        updateDoc.$unset.mobile = 1; // properly remove mobile field
+        // User is deleting mobile number - add to history as removed
+        updateDoc.$unset.mobile = 1;
+        updateDoc.$set.isMobileVerified = false;
       }
     }
 
@@ -310,6 +354,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     // Clean empty operators
     if (Object.keys(updateDoc.$set).length === 0) delete updateDoc.$set;
     if (Object.keys(updateDoc.$unset).length === 0) delete updateDoc.$unset;
+    if (updateDoc.$push && Object.keys(updateDoc.$push).length === 0) delete updateDoc.$push;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,

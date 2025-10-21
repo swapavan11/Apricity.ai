@@ -19,6 +19,24 @@ const userSchema = new mongoose.Schema({
     sparse: true, // Allows null values but ensures uniqueness when present
     trim: true
   },
+  mobileHistory: [{
+    number: {
+      type: String,
+      required: true
+    },
+    addedAt: {
+      type: Date,
+      default: Date.now
+    },
+    removedAt: {
+      type: Date,
+      default: null
+    },
+    wasVerified: {
+      type: Boolean,
+      default: false
+    }
+  }],
   password: {
     type: String,
     required: function() {
@@ -144,6 +162,7 @@ userSchema.methods.getPublicProfile = function() {
   delete userObject.emailVerificationExpires;
   delete userObject.resetPasswordToken;
   delete userObject.resetPasswordExpires;
+  delete userObject.mobileHistory; // Don't expose mobile history to client
   // Add derived flags for client UX
   userObject.hasPassword = !!this.password;
   return userObject;

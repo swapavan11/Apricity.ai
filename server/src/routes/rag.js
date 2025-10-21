@@ -136,15 +136,20 @@ router.post('/ask', authenticateToken, async (req, res) => {
   });
 
   let answer;
-  // Use PDF content if we have any relevant citations, even with low scores
-  if (avgScore < 0.01 && allowGeneral) {
+  // Use PDF content if we have any relevant citations with decent scores
+  // Lower the threshold to be more inclusive of PDF content
+  if (avgScore < 0.005 && allowGeneral) {
+    // Score is too low, use general knowledge
     const system = 'You are a knowledgeable tutor. Provide a concise, accurate answer even if no citations are present. If the question is vague, ask a clarifying follow-up.';
     const prompt = `Question: ${query}`;
     answer = await generateText({ prompt, system });
+    console.log('Using general knowledge (low score):', avgScore);
   } else {
-    const system = 'You are a helpful tutor. Answer using the provided citations from the PDFs. Always reference the page numbers and document titles. If the citations don\'t fully answer the question, say so and provide additional context.';
-    const prompt = `Question: ${query}\n\nRelevant content from PDFs:\n${citationText}\n\nAnswer based on the provided content, citing page numbers like (p. X from Document Title).`;
+    // Use PDF content - be more aggressive about using uploaded content
+    const system = 'You are a helpful tutor. Answer using the provided citations from the PDFs. Always reference the page numbers and document titles. Be comprehensive and detailed. If the citations don\'t fully answer the question, provide what information you can from the documents and explain what might be missing.';
+    const prompt = `Question: ${query}\n\nRelevant content from PDFs:\n${citationText}\n\nAnswer based on the provided content from the PDFs, citing page numbers like (p. X from "${docs[0]?.title || 'document'}"). Use the PDF content as your primary source.`;
     answer = await generateText({ prompt, system });
+    console.log('Using PDF content (score):', avgScore);
   }
   const citations = top.map(t => ({ documentId: t.d._id, title: t.d.title, page: t.c.page, snippet: (t.c.text || '').slice(0, 200) }));
 
@@ -152,14 +157,25 @@ router.post('/ask', authenticateToken, async (req, res) => {
   let chat = null;
   if (chatId) {
     chat = await Chat.findById(chatId);
+    if (!chat) {
+      console.error(`Chat ${chatId} not found`);
+    } else if (chat.userId.toString() !== req.user._id.toString()) {
+      console.error(`Chat ${chatId} access denied for user ${req.user._id}`);
+      chat = null;
+    }
   } else if (createIfMissing) {
     const docTitle = docs?.[0]?.title || 'General Chat';
-    chat = await Chat.create({ documentId: documentId || null, title: docTitle, messages: [] });
+    chat = await Chat.create({ 
+      documentId: documentId || null, 
+      title: docTitle, 
+      messages: [],
+      userId: req.user._id 
+    });
   }
 
   if (chat) {
-    chat.messages.push({ role: 'user', text: query, citations: [] });
-    chat.messages.push({ role: 'assistant', text: answer, citations });
+    chat.messages.push({ role: 'user', text: query, citations: [], createdAt: new Date() });
+    chat.messages.push({ role: 'assistant', text: answer, citations, createdAt: new Date() });
     await chat.save();
   }
 

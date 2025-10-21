@@ -1417,8 +1417,10 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                 display: 'flex',
                 alignItems: 'center',
                 flexShrink: 0,
-                background: 'rgba(0, 0, 0, 0.2)',
-                border: '1px solid rgba(124, 156, 255, 0.2)'
+                background: sidebarOpen ? 'rgba(124, 156, 255, 0.2)' : 'rgba(0, 0, 0, 0.4)',
+                border: sidebarOpen ? '1px solid rgba(124, 156, 255, 0.4)' : '1px solid rgba(124, 156, 255, 0.15)',
+                transition: 'all 0.3s ease',
+                opacity: sidebarOpen ? 1 : 0.7
               }}
             >
               {sidebarOpen ? '📂' : '📁'}

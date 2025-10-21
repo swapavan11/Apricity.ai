@@ -48,21 +48,38 @@ export default function useApi() {
     },
 
     // Chat APIs
-    listChats: async (documentId) =>
-      (await fetch(`${base}/api/rag/chats${documentId ? `?documentId=${documentId}` : ""}`)).json(),
-    getChat: async (chatId) => (await fetch(`${base}/api/rag/chats/${chatId}`)).json(),
+    listChats: async (documentId) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      return (await fetch(`${base}/api/rag/chats${documentId ? `?documentId=${documentId}` : ""}`, { headers })).json();
+    },
+    getChat: async (chatId) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      return (await fetch(`${base}/api/rag/chats/${chatId}`, { headers })).json();
+    },
     createChat: async (documentId, title) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       const res = await fetch(`${base}/api/rag/chats`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ documentId, title }),
       });
       return res.json();
     },
     ask: async (query, documentId, allowGeneral = false, chatId = null, createIfMissing = false) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       const res = await fetch(`${base}/api/rag/ask`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ query, documentId, allowGeneral, chatId, createIfMissing }),
       });
       return res.json();
@@ -70,9 +87,14 @@ export default function useApi() {
 
     // Quiz APIs
     genQuiz: async (documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       const res = await fetch(`${base}/api/quiz/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           documentId,
           mcqCount,
@@ -86,25 +108,45 @@ export default function useApi() {
       return res.json();
     },
     scoreQuiz: async (payload) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       const res = await fetch(`${base}/api/quiz/score`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
       return res.json();
     },
 
     // Progress & YouTube
-    progress: async () => (await fetch(`${base}/api/progress`)).json(),
-    getAttemptHistory: async (documentId) =>
-      (await fetch(`${base}/api/progress/attempts/${documentId}`)).json(),
+    progress: async () => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      return (await fetch(`${base}/api/progress`, { headers })).json();
+    },
+    getAttemptHistory: async (documentId) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      return (await fetch(`${base}/api/progress/attempts/${documentId}`, { headers })).json();
+    },
     youtube: async (q, documentId) => {
       const params = new URLSearchParams({ q: q || "" });
       if (documentId) params.append("documentId", documentId);
       return (await fetch(`${base}/api/youtube/recommend?${params}`)).json();
     },
     invalidateCache: async () => {
-      const res = await fetch(`${base}/api/progress/invalidate`, { method: "POST" });
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/progress/invalidate`, { 
+        method: "POST",
+        headers 
+      });
       return res.json();
     },
 
