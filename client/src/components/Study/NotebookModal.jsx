@@ -1,11 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import useApi from '../../api/useApi';
+import { useAuth } from '../AuthProvider.jsx';
 
 export default function NotebookModal({ open, onClose, associatedDocId, initialTitle = 'Notebook' }) {
   const api = useApi();
+  const { user } = useAuth();
+  
+  // Generate personalized welcome message
+  const getWelcomeMessage = () => {
+    const userName = user?.name || 'there';
+    return `<p>Hi ${userName} from Swapnil! 👋 Start taking notes here...</p>`;
+  };
+  
   const [title, setTitle] = useState(initialTitle);
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [error, setError] = useState('');
   const [size, setSize] = useState({ width: Math.min(window.innerWidth - 80, 900), height: Math.min(window.innerHeight - 120, 600) });
@@ -758,7 +769,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
   };
 
   // Export a note (current or from list) to PDF by rendering an offscreen copy of the page
-  const exportNotePdf = async (note) => {
+  const exportNotePdf = async (note, theme = 'light') => {
     try {
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
         import('html2canvas'),
@@ -779,12 +790,18 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
       const page = document.createElement('div');
       page.style.position = 'relative';
       page.style.width = `${targetW}px`;
-      page.style.background = getComputedStyle(surfaceRef.current || document.body).getPropertyValue('--panel') || '#fff';
+      // Set background based on theme choice
+      page.style.background = theme === 'dark' 
+        ? (getComputedStyle(surfaceRef.current || document.body).getPropertyValue('--panel') || '#1a1a1a')
+        : '#ffffff';
       // Editor layer
       const ed = document.createElement('div');
       ed.style.position = 'relative';
       ed.style.padding = `${EDITOR_PADDING}px`;
-      ed.style.color = 'var(--text)';
+      // Set text color based on theme choice
+      ed.style.color = theme === 'dark' 
+        ? (getComputedStyle(surfaceRef.current || document.body).getPropertyValue('--text') || '#e0e0e0')
+        : '#000000';
       ed.style.background = 'transparent';
       ed.innerHTML = note?.contentHtml ?? editorRef.current?.innerHTML ?? '';
       // Canvas layer
@@ -884,6 +901,21 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
     return () => clearTimeout(saveDebounced.current);
   }, []);
 
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (open && (editorDirtyRef.current || penDirtyRef.current || saving)) {
+        const message = 'You have unsaved changes in your notebook. Please wait while saving...';
+        e.preventDefault();
+        e.returnValue = message;
+        return message;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [open, saving]);
+
   // Load notes when opening; select latest or create a default one so edits save immediately
   useEffect(() => {
     let cancelled = false;
@@ -938,7 +970,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
             setNotes([newNote]);
             setCurrentNoteId(newNote._id);
             setTitle(newNote.title || 'Untitled');
-            if (editorRef.current) editorRef.current.innerHTML = '';
+            if (editorRef.current) editorRef.current.innerHTML = getWelcomeMessage();
             strokesRef.current = [];
             snapshotImageRef.current = null;
             redrawCanvas();
@@ -953,7 +985,25 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
     return () => { cancelled = true; };
   }, [open]);
 
-  if (!open) return null;
+  // Handle open/close animations
+  useEffect(() => {
+    if (open) {
+      // Opening animation
+      setShouldRender(true);
+      requestAnimationFrame(() => {
+        setIsAnimating(true);
+      });
+    } else if (shouldRender) {
+      // Closing animation
+      setIsAnimating(false);
+      const timer = setTimeout(() => {
+        setShouldRender(false);
+      }, 300); // Match animation duration
+      return () => clearTimeout(timer);
+    }
+  }, [open, shouldRender]);
+
+  if (!shouldRender) return null;
 
   return (
   <div 
@@ -961,7 +1011,9 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
       position: 'fixed', 
       inset: 0, 
       pointerEvents: 'none', 
-      zIndex: 50
+      zIndex: 50,
+      background: isAnimating ? 'rgba(0, 0, 0, 0)' : 'rgba(0, 0, 0, 0)',
+      transition: 'background 0.4s ease-out'
     }}
   >
       {/* Panel (draggable + resizable). We keep pointerEvents on panel only so background remains interactive where modal isn't. */}
@@ -976,12 +1028,15 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
           background: 'var(--panel)',
           border: '1px solid var(--border)',
           borderRadius: 10,
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          boxShadow: isAnimating ? '0 20px 60px rgba(0,0,0,0.6)' : '0 10px 30px rgba(0,0,0,0.3)',
           display: 'grid',
           gridTemplateColumns: sidebarOpen ? '240px 1fr' : '0px 1fr',
-          transition: 'grid-template-columns 0.4s ease-in-out',
+          transition: 'grid-template-columns 0.4s ease-in-out, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out, box-shadow 0.4s ease-out',
           pointerEvents: 'auto',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          transform: isAnimating ? 'scale(1) translateY(0) rotate(0deg)' : 'scale(0.85) translateY(-40px) rotate(-1deg)',
+          opacity: isAnimating ? 1 : 0,
+          transformOrigin: 'center top'
         }}
       >
         {/* Sidebar: Previous Notes */}
@@ -1225,11 +1280,11 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                         <button 
                           title="Download as PDF" 
                           className="secondary" 
-                          onClick={async ()=>{
+                          onClick={()=>{
                             const noteObj = (currentNoteId === n._id)
                               ? { ...n, contentHtml: editorRef.current?.innerHTML ?? n.contentHtml }
                               : n;
-                            await exportNotePdf(noteObj);
+                            setDialog({ type: 'export-pdf', note: noteObj, value: '' });
                           }}
                           style={{ 
                             padding: '4px 6px', 
@@ -2096,6 +2151,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                 {dialog.type === 'rename' && '✏️ Rename Note'}
                 {dialog.type === 'delete' && '⚠️ Delete Note'}
                 {dialog.type === 'confirm-delete-image' && '🗑️ Delete Image'}
+                {dialog.type === 'export-pdf' && '📄 Export PDF'}
               </div>
               <div style={{ padding: 14, display: 'grid', gap: 12 }}>
                 {(dialog.type === 'new' || dialog.type === 'rename') && (
@@ -2114,9 +2170,61 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                     {dialog.message || 'Delete this image?'}
                   </div>
                 )}
+                {dialog.type === 'export-pdf' && (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    <div style={{ fontSize: 14, marginBottom: 4 }}>
+                      Choose PDF theme:
+                    </div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <button 
+                        onClick={async ()=> {
+                          setDialog({ type: null, note: null, value: '' });
+                          await exportNotePdf(dialog.note, 'light');
+                        }}
+                        style={{ 
+                          padding: '12px',
+                          background: '#ffffff',
+                          color: '#000000',
+                          border: '2px solid #e0e0e0',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 500,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10
+                        }}
+                      >
+                        ☀️ Light Mode (White Background)
+                      </button>
+                      <button 
+                        onClick={async ()=> {
+                          setDialog({ type: null, note: null, value: '' });
+                          await exportNotePdf(dialog.note, 'dark');
+                        }}
+                        style={{ 
+                          padding: '12px',
+                          background: '#1a1a1a',
+                          color: '#e0e0e0',
+                          border: '2px solid #333333',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 500,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10
+                        }}
+                      >
+                        🌙 Dark Mode (Dark Background)
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button className="secondary" onClick={()=> setDialog({ type: null, note: null, value: '' })}>Cancel</button>
+                {dialog.type !== 'export-pdf' && <button className="secondary" onClick={()=> setDialog({ type: null, note: null, value: '' })}>Cancel</button>}
+                {dialog.type === 'export-pdf' && <button className="secondary" onClick={()=> setDialog({ type: null, note: null, value: '' })}>Cancel</button>}
                 {dialog.type === 'new' && (
                   <button onClick={async ()=>{
                     const name = (dialog.value || '').trim() || 'Untitled';
@@ -2132,7 +2240,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                       });
                       setCurrentNoteId(newNote._id);
                       setTitle(newNote.title || 'Untitled');
-                      if (editorRef.current) editorRef.current.innerHTML = '';
+                      if (editorRef.current) editorRef.current.innerHTML = getWelcomeMessage();
                       strokesRef.current = [];
                       redoRef.current = [];
                       snapshotImageRef.current = null;
