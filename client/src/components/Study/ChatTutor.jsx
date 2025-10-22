@@ -1,3 +1,5 @@
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -144,7 +146,7 @@ export default function ChatTutor({
       burgundy: "#3e1f2a",
       midnight: "#0f172a",
     };
-    return themes[userBubbleTheme] || themes.blue;
+    return themes[userBubbleTheme] || themes.green;
   };
 
   // Initialize voice preference from localStorage
@@ -587,16 +589,17 @@ export default function ChatTutor({
         const created = await api.createChat(selected === "all" ? null : selected, chatTitle);
         chatId = created.id;
         console.log('Chat created with ID:', chatId);
-        setActiveChatId(chatId);
-        
-        // Initialize active chat with empty messages array
+        // Set both chatId and chat state synchronously before proceeding
         chatToUpdate = {
           _id: chatId,
           title: chatTitle,
           documentId: selected === "all" ? null : selected,
           messages: []
         };
+        setActiveChatId(chatId);
         setActiveChat(chatToUpdate);
+        // Wait for state to flush before continuing (force sync)
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
       // Optimistically add user message to active chat display (with images if any)
@@ -688,38 +691,42 @@ export default function ChatTutor({
 
       // Add tutor message with full text immediately (for typing animation)
       if (res.answer) {
-        const tutorMessage = {
-          role: "tutor",
-          text: res.answer, // Store the full answer
-          createdAt: new Date().toISOString(),
-          citations: res.citations || [],
-          _fullText: res.answer // Keep original for reference
-        };
-        
-        // Update active chat with the complete message
-        const updatedChat = {
-          ...optimisticChat,
-          messages: [...optimisticChat.messages, tutorMessage]
-        };
-        setActiveChat(updatedChat);
-        
+        // Replace the placeholder tutor message (last message, isPlaceholder: true) with the real answer
+        let newMessages = [...optimisticChat.messages];
+        const lastMsg = newMessages[newMessages.length - 1];
+        if (lastMsg && lastMsg.role === 'tutor' && lastMsg.isPlaceholder) {
+          newMessages[newMessages.length - 1] = {
+            role: "tutor",
+            text: res.answer,
+            createdAt: new Date().toISOString(),
+            citations: res.citations || [],
+            _fullText: res.answer
+          };
+        } else {
+          // Fallback: append if no placeholder found
+          newMessages.push({
+            role: "tutor",
+            text: res.answer,
+            createdAt: new Date().toISOString(),
+            citations: res.citations || [],
+            _fullText: res.answer
+          });
+        }
+        setActiveChat({ ...optimisticChat, messages: newMessages });
         // Start typing animation with no delay
         requestAnimationFrame(() => {
           typeText(res.answer);
         });
-        
         // After typing finishes, clear typing state and scroll to bottom
         const typingDuration = res.answer.length * 2;
         setTimeout(() => {
           setTypingText("");
           setIsTyping(false);
-          // Scroll to bottom after response is fully rendered
           if (chatContainerRef.current) {
             requestAnimationFrame(() => {
               chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
             });
           }
-          // Release the anchor after response is complete
           lastUserMessageIndexRef.current = null;
         }, typingDuration + 100);
       } else {
@@ -978,9 +985,48 @@ export default function ChatTutor({
                           ul: ({node, ...props}) => <ul style={{ marginLeft: "1.2em", marginTop: "0.3em", marginBottom: "0.3em" }} {...props} />,
                           ol: ({node, ...props}) => <ol style={{ marginLeft: "1.2em", marginTop: "0.3em", marginBottom: "0.3em" }} {...props} />,
                           li: ({node, ...props}) => <li style={{ margin: "0.2em 0" }} {...props} />,
-                          code: ({node, inline, ...props}) => inline ? 
-                            <code style={{ background: "rgba(124, 156, 255, 0.15)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.9em" }} {...props} /> :
-                            <code style={{ display: "block", background: "rgba(124, 156, 255, 0.1)", padding: "10px", borderRadius: "6px", overflow: "auto", fontSize: "0.85em", marginTop: "0.5em", marginBottom: "0.5em" }} {...props} />,
+                          code: ({node, inline, className, children, ...props}) => {
+                            const match = /language-(\w+)/.exec(className || "");
+                            if (inline) {
+                              return (
+                                <code
+                                  style={{
+                                    background: "#355998ff",
+                                    color: "#e6e6e6",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.97em",
+                                    fontFamily: 'Fira Mono, Menlo, Monaco, Consolas, monospace',
+                                  }}
+                                  {...props}
+                                >
+                                  {children}
+                                </code>
+                              );
+                            }
+                            return (
+                              <SyntaxHighlighter
+                                style={oneDark}
+                                language={match ? match[1] : undefined}
+                                PreTag="div"
+                                customStyle={{
+                                  borderRadius: "9px",
+                                  padding: "16px 18px",
+                                  margin: "14px 0",
+                                  fontSize: "1em",
+                                  background: "rgba(8, 39, 92, 0.65)",
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                                  backdropFilter: "blur(8px)",
+                                  WebkitBackdropFilter: "blur(8px)",
+                                  border: "1px solid rgba(11, 100, 255, 0.65)",
+                                  transition: "background 0.2s",
+                                }}
+                                {...props}
+                              >
+                                {String(children).replace(/\n$/, "")}
+                              </SyntaxHighlighter>
+                            );
+                          },
                           blockquote: ({node, ...props}) => <blockquote style={{ borderLeft: "3px solid var(--accent)", paddingLeft: "12px", marginLeft: "0", opacity: 0.9, fontStyle: "italic" }} {...props} />,
                           strong: ({node, ...props}) => <strong style={{ fontWeight: 700 }} {...props} />,
                           em: ({node, ...props}) => <em style={{ fontStyle: "italic" }} {...props} />,

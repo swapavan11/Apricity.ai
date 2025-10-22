@@ -79,7 +79,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
           color: 'var(--muted)',
           fontSize: '0.9rem'
         }}>
-          Sign in to your QuizHive.ai account
+          Sign in to your Apricity.ai account
         </p>
       </div>
 

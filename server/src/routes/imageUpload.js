@@ -37,7 +37,7 @@ router.post('/image', authenticateToken, upload.single('image'), async (req, res
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          folder: 'quizhive-chat-images',
+          folder: 'Apricity-chat-images',
           resource_type: 'image'
         },
         (error, result) => {

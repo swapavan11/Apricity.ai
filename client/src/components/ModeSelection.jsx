@@ -38,7 +38,7 @@ const ModeSelection = ({ onModeSelected }) => {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent'
           }}>
-            QuizHive.ai
+            Apricity.ai
           </h1>
           <p style={{
             margin: 0,
@@ -109,7 +109,7 @@ const ModeSelection = ({ onModeSelected }) => {
               color: 'var(--muted)',
               lineHeight: '1.6'
             }}>
-              Start using QuizHive.ai immediately without creating an account. Perfect for trying out the features.
+              Start using Apricity.ai immediately without creating an account. Perfect for trying out the features.
             </p>
             
             <div style={{
@@ -218,7 +218,7 @@ const ModeSelection = ({ onModeSelected }) => {
               color: 'var(--muted)',
               lineHeight: '1.6'
             }}>
-              Get the full QuizHive.ai experience with persistent data, progress tracking, and personalized features.
+              Get the full Apricity.ai experience with persistent data, progress tracking, and personalized features.
             </p>
             
             <div style={{
@@ -292,7 +292,7 @@ const ModeSelection = ({ onModeSelected }) => {
             You can always switch between modes later
           </p>
           <p style={{ margin: 0 }}>
-            By using QuizHive.ai, you agree to our Terms of Service and Privacy Policy
+            By using Apricity.ai, you agree to our Terms of Service and Privacy Policy
           </p>
         </div>
       </div>

@@ -1,4 +1,4 @@
-# QuizHive.ai — Study Companion (MERN + Gemini)
+# Apricity.ai — Study Companion (MERN + Gemini)
 
 A responsive MERN app for revising NCERT-style coursebooks: upload/view PDFs, chat with a tutor (Gemini), generate quizzes (MCQ/SAQ/LAQ), and track progress.
 
@@ -15,7 +15,7 @@ cd server
 npm i
 # Create .env with the following:
 # PORT=5000
-# MONGO_URI=mongodb://127.0.0.1:27017/quizhiveassign
+# MONGO_URI=mongodb://127.0.0.1:27017/Apricityassign
 # GEMINI_API_KEY=YOUR_KEY
 npm run dev
 ```

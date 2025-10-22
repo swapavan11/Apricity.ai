@@ -73,7 +73,7 @@ router.post('/save', authenticateToken, upload.single('snapshot'), async (req, r
       return res.status(400).json({ success: false, message: 'Nothing to save' });
     }
 
-    const folderBase = `quizhive/users/${userId}/notes`;
+    const folderBase = `Apricity/users/${userId}/notes`;
 
     // 1) Ensure we have a note to update (create first when needed)
     let note = null;

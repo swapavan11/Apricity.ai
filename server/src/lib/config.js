@@ -4,7 +4,7 @@ export const config = {
   EMBEDDINGS_MAX_CHARS: Number(process.env.EMBEDDINGS_MAX_CHARS || 4000),
   
   // Database
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/quizhive',
+  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/Apricity',
   
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production',
@@ -20,7 +20,7 @@ export const config = {
   EMAIL_PORT: process.env.EMAIL_PORT || 587,
   EMAIL_USER: process.env.EMAIL_USER,
   EMAIL_PASS: process.env.EMAIL_PASS,
-  EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@quizhive.ai',
+  EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@Apricity.ai',
   
   // SMS: removed Twilio integration
   

@@ -177,7 +177,7 @@ const Auth = () => {
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent'
             }}>
-              QuizHive.ai
+              Apricity.ai
             </h1>
             <p style={{
               margin: 0,

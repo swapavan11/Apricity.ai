@@ -131,7 +131,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
           color: 'var(--muted)',
           fontSize: '0.9rem'
         }}>
-          Join QuizHive.ai and start your AI-powered learning journey
+          Join Apricity.ai and start your AI-powered learning journey
         </p>
       </div>
 

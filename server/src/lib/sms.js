@@ -9,7 +9,7 @@ export const sendOTP = async (mobile, otp, name) => {
   try {
     const greeting = name ? `Hi ${name}, ` : '';
     const message = await client.messages.create({
-      body: `${greeting}your QuizHive.ai verification code is: ${otp}. This code will expire in 10 minutes.`,
+      body: `${greeting}your Apricity.ai verification code is: ${otp}. This code will expire in 10 minutes.`,
       from: config.TWILIO_PHONE_NUMBER,
       to: mobile
     });
@@ -33,7 +33,7 @@ export const sendOTP = async (mobile, otp, name) => {
 export const sendWelcomeSMS = async (mobile, name) => {
   try {
     const message = await client.messages.create({
-      body: `Welcome to QuizHive.ai, ${name}! Your mobile number has been verified. Start your AI-powered quiz & study journey now.`,
+      body: `Welcome to Apricity.ai, ${name}! Your mobile number has been verified. Start your AI-powered quiz & study journey now.`,
       from: config.TWILIO_PHONE_NUMBER,
       to: mobile
     });
@@ -57,7 +57,7 @@ export const sendWelcomeSMS = async (mobile, name) => {
 export const sendPasswordResetSMS = async (mobile, name, resetUrl) => {
   try {
     const message = await client.messages.create({
-      body: `Hi ${name}, reset your QuizHive.ai password: ${resetUrl}. This link expires in 1 hour.`,
+      body: `Hi ${name}, reset your Apricity.ai password: ${resetUrl}. This link expires in 1 hour.`,
       from: config.TWILIO_PHONE_NUMBER,
       to: mobile
     });

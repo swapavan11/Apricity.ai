@@ -156,7 +156,7 @@ function AppContent() {
             >
               Q
             </div>
-            <span>QuizHive.ai</span>
+            <span>Apricity.ai</span>
           </div>
         </div>
 

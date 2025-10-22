@@ -1,6 +1,6 @@
-# QuizHive.ai - Authentication & Cloudinary Setup Guide
+# Apricity.ai - Authentication & Cloudinary Setup Guide
 
-This guide will help you set up user authentication with email/mobile OTP, Google OAuth, and Cloudinary PDF storage for the QuizHive.ai application.
+This guide will help you set up user authentication with email/mobile OTP, Google OAuth, and Cloudinary PDF storage for the Apricity.ai application.
 
 ## 🚀 Features Added
 
@@ -54,7 +54,7 @@ Create a `.env` file in the `server` directory with the following variables:
 
 ```env
 # Database
-MONGODB_URI=mongodb://localhost:27017/quizhive
+MONGODB_URI=mongodb://localhost:27017/Apricity
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
@@ -70,7 +70,7 @@ EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-password
-EMAIL_FROM=noreply@quizhive.ai
+EMAIL_FROM=noreply@Apricity.ai
 
 # Twilio (SMS)
 TWILIO_ACCOUNT_SID=your-twilio-account-sid

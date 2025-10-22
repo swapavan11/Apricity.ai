@@ -13,7 +13,7 @@ const getFooterHtml = () => {
       <div style="max-width:600px; margin:0 auto;">
         <div style="padding:24px 18px; text-align:center;">
           <div style="font-size:14px; line-height:1.7; margin-bottom:14px;">
-            © ${year} QuizHive.ai · All rights reserved.<br/>
+            © ${year} Apricity.ai · All rights reserved.<br/>
             Made with <span style="color:#ff9aa2">❤</span> by
             <a href="${github}" target="_blank" rel="noopener" style="color:#fff; text-decoration:underline; font-weight:700;">Swapnil Sontakke</a>
             at IIIT Gwalior
@@ -64,20 +64,20 @@ export const sendEmailVerification = async (email, name, token) => {
     const verificationUrl = `${config.FRONTEND_URL}/verify-email?token=${token}`;
     
     const mailOptions = {
-      from: `"QuizHive.ai" <${config.EMAIL_FROM}>`,
+      from: `"Apricity.ai" <${config.EMAIL_FROM}>`,
       to: email,
-      subject: 'Verify Your Email - QuizHive.ai',
+      subject: 'Verify Your Email - Apricity.ai',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white;">
-            <h1 style="margin: 0; font-size: 28px;">Welcome to QuizHive.ai!</h1>
+            <h1 style="margin: 0; font-size: 28px;">Welcome to Apricity.ai!</h1>
             <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your AI-powered quiz & study companion</p>
           </div>
           
           <div style="padding: 30px; background: #f8f9fa;">
             <h2 style="color: #333; margin-top: 0;">Hi ${name}!</h2>
             <p style="color: #666; line-height: 1.6;">
-              Thank you for signing up with QuizHive.ai. To complete your registration and start using our AI-powered quiz & study features, please verify your email address.
+              Thank you for signing up with Apricity.ai. To complete your registration and start using our AI-powered quiz & study features, please verify your email address.
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -99,7 +99,7 @@ export const sendEmailVerification = async (email, name, token) => {
             </p>
             
             <p style="color: #666; font-size: 14px; line-height: 1.6;">
-              This verification link will expire in 24 hours. If you didn't create an account with QuizHive.ai, you can safely ignore this email.
+              This verification link will expire in 24 hours. If you didn't create an account with Apricity.ai, you can safely ignore this email.
             </p>
           </div>
           ${getFooterHtml()}
@@ -122,20 +122,20 @@ export const sendPasswordReset = async (email, name, token) => {
     const resetUrl = `${config.FRONTEND_URL}/reset-password?token=${token}`;
     
     const mailOptions = {
-      from: `"QuizHive.ai" <${config.EMAIL_FROM}>`,
+      from: `"Apricity.ai" <${config.EMAIL_FROM}>`,
       to: email,
-      subject: 'Reset Your Password - QuizHive.ai',
+      subject: 'Reset Your Password - Apricity.ai',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white;">
             <h1 style="margin: 0; font-size: 28px;">Password Reset</h1>
-            <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">QuizHive.ai</p>
+            <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Apricity.ai</p>
           </div>
           
           <div style="padding: 30px; background: #f8f9fa;">
             <h2 style="color: #333; margin-top: 0;">Hi ${name}!</h2>
             <p style="color: #666; line-height: 1.6;">
-              We received a request to reset your password for your QuizHive.ai account. Click the button below to reset your password.
+              We received a request to reset your password for your Apricity.ai account. Click the button below to reset your password.
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -179,20 +179,20 @@ export const sendWelcomeEmail = async (email, name) => {
     const transporter = createTransporter();
     
     const mailOptions = {
-      from: `"QuizHive.ai" <${config.EMAIL_FROM}>`,
+      from: `"Apricity.ai" <${config.EMAIL_FROM}>`,
       to: email,
-      subject: 'Welcome to QuizHive.ai! 🎉',
+      subject: 'Welcome to Apricity.ai! 🎉',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white;">
-            <h1 style="margin: 0; font-size: 28px;">Welcome to QuizHive.ai! 🎉</h1>
+            <h1 style="margin: 0; font-size: 28px;">Welcome to Apricity.ai! 🎉</h1>
             <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your AI-powered quiz & study journey starts now</p>
           </div>
           
           <div style="padding: 30px; background: #f8f9fa;">
             <h2 style="color: #333; margin-top: 0;">Hi ${name}!</h2>
             <p style="color: #666; line-height: 1.6;">
-              Congratulations! Your email has been verified and your QuizHive.ai account is now active. 
+              Congratulations! Your email has been verified and your Apricity.ai account is now active. 
               You can now start uploading PDFs, taking quizzes, and chatting with your AI tutor.
             </p>
             

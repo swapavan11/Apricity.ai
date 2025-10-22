@@ -1,5 +1,5 @@
 {
-  "name": "quizhive-client",
+  "name": "Apricity-client",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -18,7 +18,9 @@
     "react-router-dom": "^6.26.2",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0"
+  "remark-math": "^6.0.0",
+  "katex": "^0.16.9",
+  "react-syntax-highlighter": "^15.5.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

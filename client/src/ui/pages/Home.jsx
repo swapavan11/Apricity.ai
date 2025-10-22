@@ -7,7 +7,7 @@ export default function Home() {
       <div className="section">
         <div style={{textAlign:'center', marginBottom:'40px'}}>
           <h1 style={{marginTop:0, fontSize:'2.5em', background:'linear-gradient(135deg, var(--accent), var(--accent2))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:'16px'}}>
-            Welcome to QuizHive.ai
+            Welcome to Apricity.ai
           </h1>
           <p style={{fontSize:'1.2em', color:'var(--muted)', maxWidth:'600px', margin:'0 auto'}}>
             Your intelligent study companion powered by AI. Transform your learning experience with smart PDF analysis, personalized tutoring, and comprehensive progress tracking.
