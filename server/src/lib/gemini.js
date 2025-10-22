@@ -126,6 +126,74 @@ export async function generateText({ prompt, system, model = DEFAULT_MODEL, temp
 }
 
 /**
+ * Generate text with image support using Gemini Vision.
+ * @param {object} options
+ * @param {string} options.prompt - Main user prompt.
+ * @param {string} [options.system] - Optional system-level instruction.
+ * @param {string[]} [options.imageUrls] - Array of image URLs to analyze.
+ * @param {string} [options.model] - Model name (default: gemini-2.0-flash-exp for vision).
+ * @param {number} [options.temperature] - Creativity control (0–1 range).
+ * @returns {Promise<string>} Generated text content.
+ */
+export async function generateTextWithImages({ prompt, system, imageUrls = [], model = "gemini-2.0-flash-exp", temperature = 0.2 }) {
+  const modelsToTry = ["gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-pro"];
+  
+  for (const mName of modelsToTry) {
+    try {
+      const m = getGemini(mName);
+      
+      // Build parts array with text and images
+      const parts = [];
+      
+      // Add system message if provided
+      if (system) {
+        parts.push({ text: `System: ${system}\n\n` });
+      }
+      
+      // Add images first
+      for (const url of imageUrls) {
+        try {
+          // Fetch image and convert to base64
+          const response = await fetch(url);
+          const buffer = await response.arrayBuffer();
+          const base64 = Buffer.from(buffer).toString('base64');
+          
+          // Determine mime type from URL or response
+          const contentType = response.headers.get('content-type') || 'image/jpeg';
+          
+          parts.push({
+            inlineData: {
+              mimeType: contentType,
+              data: base64
+            }
+          });
+        } catch (imgErr) {
+          console.error(`Failed to fetch image ${url}:`, imgErr.message);
+        }
+      }
+      
+      // Add text prompt
+      parts.push({ text: prompt });
+      
+      const result = await withRetry(() => m.generateContent({
+        contents: [{ role: "user", parts }],
+        generationConfig: { temperature },
+      }), { attempts: 3, baseDelayMs: 600 });
+      
+      const response = result?.response;
+      const text = response?.text?.() || "";
+      if (text) return text;
+    } catch (err) {
+      const status = err?.status || err?.statusCode || "?";
+      const code = err?.error?.code || err?.code || "";
+      console.warn(`Vision model ${mName} failed [status ${status}${code ? ", code " + code : ""}], trying next`);
+      continue;
+    }
+  }
+  return "(Service temporarily unavailable. Please try again.)";
+}
+
+/**
  * Generate embeddings for an array of texts.
  * @param {string[]} texts - List of texts to embed.
  * @param {object} [options]

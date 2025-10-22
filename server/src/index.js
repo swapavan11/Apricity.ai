@@ -13,6 +13,7 @@ import passport from './lib/passport.js';
 import { config } from './lib/config.js';
 
 import uploadRouter from './routes/upload.js';
+import imageUploadRouter from './routes/imageUpload.js';
 import ragRouter from './routes/rag.js';
 import quizRouter from './routes/quiz.js';
 import progressRouter from './routes/progress.js';
@@ -62,6 +63,7 @@ app.get('/api/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/upload', imageUploadRouter); // Image upload for chat
 app.use('/api/rag', ragRouter);
 app.use('/api/quiz', quizRouter);
 app.use('/api/progress', progressRouter);

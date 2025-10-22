@@ -24,7 +24,7 @@ export default function Home() {
           <div className="section" style={{textAlign:'center'}}>
             <div style={{fontSize:'3em', marginBottom:'16px'}}>🤖</div>
             <h3 style={{marginTop:0, color:'var(--accent)'}}>AI Tutor Chat</h3>
-            <p>Chat with an intelligent tutor powered by Gemini AI. Get personalized explanations, ask follow-up questions, and receive detailed answers with citations.</p>
+            <p>Chat with an intelligent tutor Gini. Get personalized explanations, ask follow-up questions, and receive detailed answers with citations.</p>
           </div>
           
           <div className="section" style={{textAlign:'center'}}>

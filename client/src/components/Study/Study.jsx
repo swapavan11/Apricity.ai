@@ -101,22 +101,36 @@ export default function Study({ selected, docs }) {
     return () => { mounted = false; }
   }, [selected]); // eslint-disable-line
 
-  // Handler for creating a new chat (same behavior as earlier monolith new chat button)
+  // Handler for creating a new chat (optimized for speed)
   const createNewChat = async () => {
     const ts = new Date();
     const docTitle = (docs.find((d) => d._id === selected)?.title) || "General";
     const base = question?.trim() ? question.trim().slice(0, 40) : docTitle;
     const title = `${base} • ${ts.toLocaleDateString()} ${ts.toLocaleTimeString()}`;
+    
     try {
+      // Create chat and immediately set state (optimistic update)
       const created = await api.createChat(selected === "all" ? null : selected, title);
+      
+      // Immediately set active chat with empty messages (no need to fetch)
+      const newChat = {
+        _id: created.id,
+        title: created.title || title,
+        documentId: created.documentId,
+        messages: [],
+        createdAt: ts.toISOString(),
+        updatedAt: ts.toISOString()
+      };
+      
       setActiveChatId(created.id);
-      // refresh chat list
-      const lst = await api.listChats(selected === "all" ? null : selected);
-      setChats(lst.chats || []);
-      // load created chat
-      const c = await api.getChat(created.id);
-      setActiveChat(c);
+      setActiveChat(newChat);
       setActiveTab("chat");
+      
+      // Update chat list in background (non-blocking)
+      api.listChats(selected === "all" ? null : selected).then(lst => {
+        setChats(lst.chats || []);
+      }).catch(err => console.error("Failed to refresh chat list:", err));
+      
     } catch (err) {
       console.error("Failed to create chat:", err);
     }
@@ -261,6 +275,7 @@ export default function Study({ selected, docs }) {
       {/* Chat history slider (floating) */}
       <ChatHistorySlider
         chats={chats}
+        setChats={setChats}
         chatHistoryVisible={chatHistoryVisible}
         setChatHistoryVisible={setChatHistoryVisible}
         activeChatId={activeChatId}
@@ -269,6 +284,7 @@ export default function Study({ selected, docs }) {
         api={api}
         docs={docs}
         setActiveTab={setActiveTab}
+        selected={selected}
       />
 
       <NotebookModal open={notebookOpen} onClose={() => setNotebookOpen(false)} associatedDocId={selected === 'all' ? '' : selected} />

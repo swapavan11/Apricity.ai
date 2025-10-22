@@ -1,7 +1,7 @@
 import express from 'express';
 import Document from '../models/Document.js';
 import Chat from '../models/Chat.js';
-import { generateText, embedTexts } from '../lib/gemini.js';
+import { generateText, generateTextWithImages, embedTexts } from '../lib/gemini.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -48,6 +48,40 @@ router.post('/chats', authenticateToken, async (req, res) => {
   res.json({ id: chat._id, title: chat.title, documentId: chat.documentId });
 });
 
+// Delete chat
+router.delete('/chats/:id', authenticateToken, async (req, res) => {
+  try {
+    const chat = await Chat.findById(req.params.id);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.userId.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied' });
+    
+    await Chat.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Chat deleted successfully' });
+  } catch (error) {
+    console.error('Delete chat error:', error);
+    res.status(500).json({ error: 'Failed to delete chat' });
+  }
+});
+
+// Rename chat
+router.patch('/chats/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required' });
+    
+    const chat = await Chat.findById(req.params.id);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.userId.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied' });
+    
+    chat.title = title.trim();
+    await chat.save();
+    res.json({ success: true, chat: { _id: chat._id, title: chat.title } });
+  } catch (error) {
+    console.error('Rename chat error:', error);
+    res.status(500).json({ error: 'Failed to rename chat' });
+  }
+});
+
 router.get('/debug', async (req, res) => {
   const docs = await Document.find({});
   const summary = docs.map(d => ({
@@ -87,38 +121,54 @@ function lexicalScore(a, b) {
 
 // Ask endpoint: require authentication to use user-owned documents and persist chats
 router.post('/ask', authenticateToken, async (req, res) => {
-  const { query, documentId, allowGeneral = true, chatId, createIfMissing } = req.body;
-  if (!query) return res.status(400).json({ error: 'query required' });
+  try {
+    const { query, documentId, allowGeneral = true, chatId, createIfMissing, images = [] } = req.body;
+    if (!query) return res.status(400).json({ error: 'query required' });
+    
+    console.log('Ask request:', { query: query.slice(0, 50), documentId, chatId, hasImages: images.length > 0, userId: req.user._id });
   
   // If documentId is explicitly null or "all", use general knowledge (no PDF)
   if (!documentId || documentId === 'all') {
     console.log('General chat mode - no PDF selected');
-    const system = `You are Gini (pronounced with a hard G like "gun", not like "genie"), an AI tutor created for QuizHive.ai by Swapavan. 
+    const system = `You are Gini, an AI tutor from QuizHive.ai created by Swapnil Sontakke. Your role is to help students learn effectively.
 
-QuizHive.ai is an intelligent learning platform that helps students study effectively using AI-powered tools. The platform was developed by Swapavan, a passionate developer dedicated to revolutionizing education through technology.
+Key guidelines:
+- Provide **concise, medium-length answers** (2-4 paragraphs for most questions)
+- Be clear and direct - get to the point quickly
+- Use simple language with relevant examples when needed
+- Break down complex concepts into understandable parts
+- Be conversational and natural - avoid robotic or repetitive introductions
+- Only mention your identity if directly asked "who are you" or "what are you" and when you get greeting
+- Focus on answering the question directly rather than introducing yourself
+- Remember the conversation context and refer back to previous messages when relevant
 
-When asked about yourself:
-- You are Gini, the AI tutor of QuizHive.ai
-- You were created and designed by Swapavan
-- You are part of QuizHive.ai, an AI-powered learning platform
-- Your purpose is to help students learn effectively through personalized tutoring
-
-Your capabilities:
-- Answer questions on any topic with comprehensive, well-researched responses
-- Help students understand complex concepts with clear explanations
-- Provide examples and context to enhance learning
-- Be detailed, accurate, and educational in your responses
-
-Always be friendly, encouraging, and patient with students. Use examples and explain concepts clearly.`;
-    const prompt = `Question: ${query}`;
-    const answer = await generateText({ prompt, system });
+Always be friendly, encouraging, and patient.`;
+    
+    // Build context from chat history if available
+    let contextPrompt = '';
+    if (chatId) {
+      const existingChat = await Chat.findById(chatId);
+      if (existingChat && existingChat.messages && existingChat.messages.length > 0) {
+        const recentMessages = existingChat.messages.slice(-6); // Last 6 messages (3 exchanges)
+        contextPrompt = '\n\nPrevious conversation:\n' + recentMessages.map(m => 
+          `${m.role === 'user' ? 'Student' : 'You'}: ${m.text.slice(0, 200)}`
+        ).join('\n') + '\n\n';
+      }
+    }
+    
+    const prompt = `${contextPrompt}Current question: ${query}`;
+    
+    // Use vision API if images are present
+    const answer = images.length > 0
+      ? await generateTextWithImages({ prompt, system, imageUrls: images, temperature: 0.7 })
+      : await generateText({ prompt, system, temperature: 0.7 });
     
     // Persist to chat history if chatId provided
     let chat = null;
     if (chatId) {
       chat = await Chat.findById(chatId);
       if (chat && chat.userId.toString() === req.user._id.toString()) {
-        chat.messages.push({ role: 'user', text: query, citations: [], createdAt: new Date() });
+        chat.messages.push({ role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() });
         chat.messages.push({ role: 'assistant', text: answer, citations: [], createdAt: new Date() });
         await chat.save();
       }
@@ -127,7 +177,7 @@ Always be friendly, encouraging, and patient with students. Use examples and exp
         documentId: null, 
         title: 'General Chat', 
         messages: [
-          { role: 'user', text: query, citations: [], createdAt: new Date() },
+          { role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() },
           { role: 'assistant', text: answer, citations: [], createdAt: new Date() }
         ],
         userId: req.user._id 
@@ -199,19 +249,52 @@ Always be friendly, encouraging, and patient with students. Use examples and exp
   // Lower the threshold to be more inclusive of PDF content
   if (avgScore < 0.005 && allowGeneral) {
     // Score is too low, use general knowledge with context that user has a PDF
-    const system = `You are Gini (pronounced with a hard G like "gun"), an AI tutor created for QuizHive.ai by Swapavan. The user has a PDF document but their question doesn't seem directly related to it. Provide a comprehensive, well-researched answer to their general question. Be detailed and educational.
+    // Always use concise mode
+    
+    const system = `You are Gini, an AI tutor from QuizHive.ai. The user has uploaded a PDF but their question isn't directly related to it.
 
-When asked about yourself: You are Gini from QuizHive.ai, created by Swapavan to help students learn effectively.`;
+Guidelines:
+- Give **concise, medium-length answers** (2-4 paragraphs for most questions)
+- Be clear and direct - get to the point quickly
+- Include relevant examples when helpful
+- Break down complex ideas into understandable parts
+- Be conversational and natural in your tone
+- Only mention your identity if directly asked about who you are
+
+Focus on clarity and ensuring the student understands.`;
     const prompt = `Question: ${query}`;
-    answer = await generateText({ prompt, system });
+    answer = await generateText({ prompt, system, temperature: 0.7 });
     console.log('Using general knowledge (low score):', avgScore);
   } else {
-    // Use PDF content - be comprehensive and detailed
-    const system = `You are Gini (pronounced with a hard G like "gun"), a helpful AI tutor from QuizHive.ai created by Swapavan, analyzing PDF documents. Provide a comprehensive, detailed answer based on the citations from the PDF. Reference page numbers naturally in your text like "According to the document (Page X)..." or "As mentioned on Page X...". Be thorough in your explanation - use all relevant information from the citations to give a complete answer. If the citations contain related information, include it to provide full context. Structure your response clearly and make it educational. Do NOT include document titles in your citations - ONLY use simple page number references like (Page 5).
+    // Use PDF content
+    // Always use concise mode
+    
+    const system = `You are Gini, an AI tutor from QuizHive.ai analyzing PDF documents.
 
-When asked about yourself: You are Gini from QuizHive.ai, created by Swapavan to help students learn effectively.`;
-    const prompt = `Question: ${query}\n\nRelevant content from the PDF:\n${citationText}\n\nProvide a detailed, well-explained answer using the content from the PDF. Reference page numbers naturally in your text using simple format like (Page 5) or "on Page 5" - do NOT include document titles in citations. Be comprehensive in your explanation.`;
-    answer = await generateText({ prompt, system });
+Guidelines for answering:
+1. **Start with PDF content**: State what the PDF says about the topic
+   - Reference page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...")
+   - If PDF has limited info, state: "The PDF briefly mentions [summary]"
+   
+2. **Then add brief explanation**: After the PDF content, provide a concise explanation:
+   - Keep it **medium-length** (2-4 paragraphs for most questions)
+   - Add context and clarify key concepts
+   - Include relevant examples
+   
+3. **Natural tone**: Be conversational and educational, not robotic
+4. **Only mention identity if asked**: Don't introduce yourself unless asked
+
+IMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.
+
+Do NOT include document titles in citations - use only simple page references like (Page 5).`;
+    
+    const prompt = `Question: ${query}
+
+Relevant content from the PDF:
+${citationText}
+
+Provide a clear, focused answer (2-4 paragraphs). Start with what the PDF says (reference page numbers like "Page 5"), then add context and explanation to help the student understand.`;
+    answer = await generateText({ prompt, system, temperature: 0.7 });
     console.log('Using PDF content (score):', avgScore);
   }
   const citations = top.map(t => ({ documentId: t.d._id, title: t.d.title, page: t.c.page, snippet: (t.c.text || '').slice(0, 200) }));
@@ -221,28 +304,37 @@ When asked about yourself: You are Gini from QuizHive.ai, created by Swapavan to
   if (chatId) {
     chat = await Chat.findById(chatId);
     if (!chat) {
-      console.error(`Chat ${chatId} not found`);
+      console.warn(`Chat ${chatId} not found - will return answer without saving to chat`);
+      // Still return the answer, just don't save to chat
     } else if (chat.userId.toString() !== req.user._id.toString()) {
       console.error(`Chat ${chatId} access denied for user ${req.user._id}`);
       chat = null;
+    } else {
+      // Chat found and authorized - save messages
+      chat.messages.push({ role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() });
+      chat.messages.push({ role: 'assistant', text: answer, citations, createdAt: new Date() });
+      await chat.save();
+      console.log(`Messages saved to chat ${chatId}`);
     }
   } else if (createIfMissing) {
     const docTitle = docs?.[0]?.title || 'General Chat';
     chat = await Chat.create({ 
       documentId: documentId || null, 
       title: docTitle, 
-      messages: [],
+      messages: [
+        { role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() },
+        { role: 'assistant', text: answer, citations, createdAt: new Date() }
+      ],
       userId: req.user._id 
     });
-  }
-
-  if (chat) {
-    chat.messages.push({ role: 'user', text: query, citations: [], createdAt: new Date() });
-    chat.messages.push({ role: 'assistant', text: answer, citations, createdAt: new Date() });
-    await chat.save();
+    console.log(`New chat created with ID ${chat._id}`);
   }
 
   res.json({ answer, citations, usedGeneral: avgScore < 0.01 && allowGeneral, chatId: chat?._id || chatId || null });
+  } catch (error) {
+    console.error('Ask endpoint error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error', answer: null });
+  }
 });
 
 export default router;

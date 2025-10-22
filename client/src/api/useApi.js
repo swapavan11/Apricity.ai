@@ -71,7 +71,32 @@ export default function useApi() {
       });
       return res.json();
     },
-    ask: async (query, documentId, allowGeneral = false, chatId = null, createIfMissing = false) => {
+    deleteChat: async (chatId) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/rag/chats/${chatId}`, {
+        method: "DELETE",
+        headers,
+      });
+      return res.json();
+    },
+    renameChat: async (chatId, newTitle) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/rag/chats/${chatId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ title: newTitle }),
+      });
+      return res.json();
+    },
+    ask: async (query, documentId, allowGeneral = false, chatId = null, createIfMissing = false, signal = null, inDepthMode = false, images = []) => {
       const token = localStorage.getItem('token');
       const headers = { 
         "Content-Type": "application/json",
@@ -80,8 +105,13 @@ export default function useApi() {
       const res = await fetch(`${base}/api/rag/ask`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ query, documentId, allowGeneral, chatId, createIfMissing }),
+        body: JSON.stringify({ query, documentId, allowGeneral, chatId, createIfMissing, inDepthMode, images }),
+        signal, // Pass abort signal
       });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
       return res.json();
     },
 

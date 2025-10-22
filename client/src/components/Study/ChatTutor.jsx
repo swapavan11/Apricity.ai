@@ -35,6 +35,91 @@ export default function ChatTutor({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const messageRefs = useRef([]); // refs to message elements
   const lastUserMessageIndexRef = useRef(null); // Track the last user message to anchor to
+  const abortControllerRef = useRef(null); // Abort controller for cancelling requests
+  const [editingMessageIndex, setEditingMessageIndex] = useState(null); // Track which message is being edited
+  const [editedText, setEditedText] = useState(""); // Text being edited
+  // Store versions per chat: { chatId: { messageIndex: [versions] } }
+  const [allChatVersions, setAllChatVersions] = useState({});
+  // Store current version index per chat: { chatId: { messageIndex: versionIndex } }
+  const [allCurrentVersions, setAllCurrentVersions] = useState({});
+  // Store latest messages per chat: { chatId: { messageIndex: messages } }
+  const [allLatestMessages, setAllLatestMessages] = useState({});
+  const [inDepthMode, setInDepthMode] = useState(false); // Toggle for in-depth responses
+  const [uploadedImages, setUploadedImages] = useState([]); // Store uploaded image URLs
+  const [uploadingImage, setUploadingImage] = useState(false); // Track image upload status
+  
+  // Get current chat's versions
+  const messageVersions = allChatVersions[activeChatId] || {};
+  const currentVersionIndex = allCurrentVersions[activeChatId] || {};
+  const latestMessages = allLatestMessages[activeChatId] || {};
+  
+  // When switching chats, reset to show latest versions (but keep version history)
+  useEffect(() => {
+    if (activeChatId) {
+      // Reset current version indices to show latest messages
+      // Keep the version history data so navigation still works
+      setAllCurrentVersions(prev => {
+        const newVersions = { ...prev };
+        newVersions[activeChatId] = {}; // Empty object = show latest for all messages
+        return newVersions;
+      });
+    }
+  }, [activeChatId]); // Run whenever chat ID changes
+  
+  // Auto-scroll to bottom when opening a chat
+  useEffect(() => {
+    if (activeChat && activeChat.messages && activeChat.messages.length > 0) {
+      // Small delay to ensure messages are rendered
+      setTimeout(() => {
+        const chatContainer = document.querySelector('[style*="overflow-y: auto"]');
+        if (chatContainer) {
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+      }, 100);
+    }
+  }, [activeChatId]); // Only when chat changes, not on every message
+  
+  // Debug loadingAsk state
+  useEffect(() => {
+    console.log('loadingAsk state changed:', loadingAsk);
+  }, [loadingAsk]);
+
+  // Handle image upload
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+    
+    setUploadingImage(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/upload/image', {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload image');
+      }
+      
+      const data = await response.json();
+      
+      // Add uploaded image URL to state
+      setUploadedImages(prev => [...prev, data.url]);
+      setUploadingImage(false);
+      
+      console.log('Image uploaded:', data.url);
+    } catch (error) {
+      console.error('Image upload error:', error);
+      setErrorMsg('Failed to upload image');
+      setUploadingImage(false);
+    }
+  };
 
   // User bubble theme options (imported from localStorage)
   const getBubbleTheme = () => {
@@ -203,23 +288,286 @@ export default function ChatTutor({
     messageRefs.current = [];
     // reset anchor when switching chats
     lastUserMessageIndexRef.current = null;
+    // Cancel any ongoing generation when switching chats
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoadingAsk(false);
+    setIsTyping(false);
+    if (typingIntervalRef.current) {
+      clearInterval(typingIntervalRef.current);
+    }
     
     return () => {
       // Also cleanup on unmount
       window.speechSynthesis.cancel();
       setSpeakingMessageId(null);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, [activeChatId]);
 
+  // Start editing a message
+  const onEditMessage = (index, text) => {
+    setEditingMessageIndex(index);
+    setEditedText(text);
+  };
+
+  // Cancel editing
+  const onCancelEdit = () => {
+    setEditingMessageIndex(null);
+    setEditedText("");
+  };
+
+  // Save edited message and regenerate
+  const onSaveEdit = async () => {
+    if (!editedText.trim() || editingMessageIndex === null) return;
+    
+    const messages = activeChat?.messages || [];
+    const originalMessage = messages[editingMessageIndex];
+    
+    // Save the current conversation branch before editing
+    const branchKey = editingMessageIndex;
+    const currentBranch = messages.slice(editingMessageIndex);
+    
+    // Save latest messages if this is the first edit at this point
+    if (!latestMessages[branchKey]) {
+      setAllLatestMessages(prev => ({
+        ...prev,
+        [activeChatId]: {
+          ...(prev[activeChatId] || {}),
+          [branchKey]: currentBranch
+        }
+      }));
+    }
+    
+    setAllChatVersions(prev => ({
+      ...prev,
+      [activeChatId]: {
+        ...(prev[activeChatId] || {}),
+        [branchKey]: [
+          ...((prev[activeChatId] || {})[branchKey] || []),
+          { messages: currentBranch, timestamp: new Date().toISOString() }
+        ]
+      }
+    }));
+    
+    // Update the message with edited text
+    const updatedMessages = messages.slice(0, editingMessageIndex);
+    updatedMessages.push({
+      ...originalMessage,
+      text: editedText.trim(),
+      edited: true,
+      editedAt: new Date().toISOString()
+    });
+    
+    setActiveChat({
+      ...activeChat,
+      messages: updatedMessages
+    });
+    
+    setEditingMessageIndex(null);
+    setEditedText("");
+    
+    // Regenerate response for the edited question
+    setLoadingAsk(true);
+    abortControllerRef.current = new AbortController();
+    
+    try {
+      // Add placeholder tutor message
+      const chatWithPlaceholder = {
+        ...activeChat,
+        messages: [
+          ...updatedMessages,
+          { role: "tutor", text: "", createdAt: new Date().toISOString(), citations: [], isPlaceholder: true }
+        ]
+      };
+      setActiveChat(chatWithPlaceholder);
+      
+      const res = await api.ask(
+        editedText.trim(),
+        selected === "all" ? null : selected,
+        false,
+        activeChatId,
+        false,
+        abortControllerRef.current?.signal
+      );
+      
+      setLoadingAsk(false);
+      abortControllerRef.current = null;
+      
+      if (res.answer) {
+        const tutorMessage = {
+          role: "tutor",
+          text: res.answer,
+          createdAt: new Date().toISOString(),
+          citations: res.citations || [],
+          _fullText: res.answer
+        };
+        
+        const finalChat = {
+          ...activeChat,
+          messages: [...updatedMessages, tutorMessage]
+        };
+        setActiveChat(finalChat);
+        
+        // Update latest messages with the new response
+        setAllLatestMessages(prev => ({
+          ...prev,
+          [activeChatId]: {
+            ...(prev[activeChatId] || {}),
+            [editingMessageIndex]: [...updatedMessages.slice(editingMessageIndex), tutorMessage]
+          }
+        }));
+        
+        // Start typing animation
+        requestAnimationFrame(() => {
+          typeText(res.answer);
+        });
+        
+        const typingDuration = res.answer.length * 2;
+        setTimeout(() => {
+          setTypingText("");
+          setIsTyping(false);
+          if (chatContainerRef.current) {
+            requestAnimationFrame(() => {
+              chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            });
+          }
+        }, typingDuration + 100);
+      }
+      
+      // Refresh chat list
+      const lst = await api.listChats(selected === "all" ? null : selected);
+      setChats(lst.chats || []);
+      
+    } catch (err) {
+      console.error("Regenerate error:", err);
+      if (err.name === 'AbortError') {
+        setErrorMsg("Generation stopped by user");
+      } else {
+        setErrorMsg(err.message || "Failed to regenerate response");
+      }
+      setLoadingAsk(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  // Navigate to a specific version
+  const navigateToVersion = (messageIndex, versionIndex) => {
+    const versions = messageVersions[messageIndex];
+    if (!versions || versionIndex < -1 || versionIndex >= versions.length) return;
+    
+    const messages = activeChat?.messages || [];
+    let messagesToRestore;
+    
+    if (versionIndex === -1) {
+      // Restore latest version
+      messagesToRestore = latestMessages[messageIndex];
+      if (!messagesToRestore) {
+        // If no saved latest, we're already at latest
+        setAllCurrentVersions(prev => ({
+          ...prev,
+          [activeChatId]: {
+            ...(prev[activeChatId] || {}),
+            [messageIndex]: -1
+          }
+        }));
+        return;
+      }
+    } else {
+      // Restore a previous version
+      const branch = versions[versionIndex];
+      messagesToRestore = branch.messages;
+    }
+    
+    const updatedMessages = [
+      ...messages.slice(0, messageIndex),
+      ...messagesToRestore
+    ];
+    
+    setActiveChat({
+      ...activeChat,
+      messages: updatedMessages
+    });
+    
+    setAllCurrentVersions(prev => ({
+      ...prev,
+      [activeChatId]: {
+        ...(prev[activeChatId] || {}),
+        [messageIndex]: versionIndex
+      }
+    }));
+  };
+  
+  // Go to previous version
+  const onPreviousVersion = (messageIndex) => {
+    const currentIdx = currentVersionIndex[messageIndex] ?? -1;
+    const versions = messageVersions[messageIndex];
+    if (!versions) return;
+    
+    const newIndex = currentIdx + 1;
+    if (newIndex < versions.length) {
+      navigateToVersion(messageIndex, newIndex);
+    }
+  };
+  
+  // Go to next version (more recent)
+  const onNextVersion = (messageIndex) => {
+    const currentIdx = currentVersionIndex[messageIndex] ?? -1;
+    const newIndex = currentIdx - 1;
+    if (newIndex >= -1) {
+      navigateToVersion(messageIndex, newIndex);
+    }
+  };
+
+  // Stop generation
+  const onStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoadingAsk(false);
+    setIsTyping(false);
+    if (typingIntervalRef.current) {
+      clearInterval(typingIntervalRef.current);
+      typingIntervalRef.current = null;
+    }
+    setTypingText("");
+    setErrorMsg(""); // Clear any error messages
+    
+    // Remove the placeholder "thinking" message if it exists
+    if (activeChat?.messages?.length > 0) {
+      const lastMsg = activeChat.messages[activeChat.messages.length - 1];
+      if (lastMsg.isPlaceholder || (lastMsg.role === 'tutor' && !lastMsg.text) || lastMsg.text === "") {
+        setActiveChat({
+          ...activeChat,
+          messages: activeChat.messages.slice(0, -1)
+        });
+      }
+    }
+  };
+
   // Ask the tutor a question
   const onAsk = async () => {
-    if (!question.trim()) return;
+    if (!question.trim() || loadingAsk) return; // Prevent sending while loading
+    
     const userQuestion = question.trim();
-    setQuestion(""); // Clear input immediately
+    
+    // Set loading state FIRST before any async operations
+    setLoadingAsk(true);
+    console.log('Loading state set to true');
+    setQuestion(""); // Clear input immediately after setting loading
     setAnswer("");
     setCitations([]);
     setErrorMsg("");
-    setLoadingAsk(true);
+    
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController();
+    console.log('Abort controller created');
     // Don't force auto-scroll; we'll anchor the view to the new user message near the top
     shouldAutoScrollRef.current = false;
     
@@ -229,11 +577,13 @@ export default function ChatTutor({
       
       // If no active chat, create one
       if (!chatId) {
-        const ts = new Date();
-        const docTitle = docs.find((d) => d._id === selected)?.title || "General";
-        const chatTitle = `${userQuestion.slice(0, 40) || docTitle} • ${ts.toLocaleDateString()} ${ts.toLocaleTimeString()}`;
+        console.log('Creating new chat...');
+        const docTitle = docs.find((d) => d._id === selected)?.title || "General Chat";
+        // Use first question as title (max 50 chars) or doc title
+        const chatTitle = userQuestion.slice(0, 50) || docTitle;
         const created = await api.createChat(selected === "all" ? null : selected, chatTitle);
         chatId = created.id;
+        console.log('Chat created with ID:', chatId);
         setActiveChatId(chatId);
         
         // Initialize active chat with empty messages array
@@ -246,14 +596,24 @@ export default function ChatTutor({
         setActiveChat(chatToUpdate);
       }
 
-      // Optimistically add user message to active chat display
+      // Optimistically add user message to active chat display (with images if any)
       const optimisticChat = {
         ...chatToUpdate,
         messages: [
           ...(chatToUpdate?.messages || []),
-          { role: "user", text: userQuestion, createdAt: new Date().toISOString(), citations: [] }
+          { 
+            role: "user", 
+            text: userQuestion, 
+            images: uploadedImages.length > 0 ? [...uploadedImages] : undefined,
+            createdAt: new Date().toISOString(), 
+            citations: [] 
+          }
         ]
       };
+      
+      // Clear uploaded images after adding to message
+      const messagesToSend = uploadedImages.length > 0 ? [...uploadedImages] : [];
+      setUploadedImages([]);
       
       // Store the index of this user message for anchoring
       const userMessageIndex = optimisticChat.messages.length - 1;
@@ -288,20 +648,40 @@ export default function ChatTutor({
         }
       }, 50); // Small delay to ensure DOM has updated
 
+      console.log('Making API call with:', {
+        query: userQuestion.slice(0, 50),
+        documentId: selected === "all" ? null : selected,
+        allowGeneral: false,
+        chatId,
+        createIfMissing: false,
+        inDepthMode
+      });
+
       const res = await api.ask(
         userQuestion,
         selected === "all" ? null : selected,
         false,
         chatId,
-        false
+        false,
+        abortControllerRef.current?.signal, // Pass abort signal
+        inDepthMode, // Pass in-depth mode
+        messagesToSend // Pass images
       );
+
+      console.log('API Response received:', res);
 
       // Stop loading IMMEDIATELY when response arrives
       setLoadingAsk(false);
+      abortControllerRef.current = null;
 
       // Clear answer/citations state so they don't show in fallback display
       setAnswer("");
       setCitations([]);
+
+      // Check if response is valid
+      if (!res || typeof res !== 'object') {
+        throw new Error('Invalid response from server');
+      }
 
       // Add tutor message with full text immediately (for typing animation)
       if (res.answer) {
@@ -339,6 +719,10 @@ export default function ChatTutor({
           // Release the anchor after response is complete
           lastUserMessageIndexRef.current = null;
         }, typingDuration + 100);
+      } else {
+        // No answer in response
+        console.error('No answer in response:', res);
+        throw new Error(res.error || 'No response received from the server');
       }
 
       // Refresh chat list to update timestamps
@@ -358,10 +742,38 @@ export default function ChatTutor({
       }
     } catch (err) {
       console.error("Ask error:", err);
-      setErrorMsg(err.message || "Failed to get tutor response");
+      
+      // Check if it was aborted by user (AbortError)
+      if (err.name === 'AbortError') {
+        // User manually stopped - don't show error, just clean up
+        console.log('Request aborted by user');
+        setErrorMsg("");
+      } else {
+        // Real error, not abort
+        console.error('Real error:', err);
+        setErrorMsg(err.message || "Failed to get tutor response");
+      }
+      
+      // Clean up state regardless of error type
       setLoadingAsk(false);
-      // If error, remove optimistic user message
-      setActiveChat(activeChat);
+      setIsTyping(false);
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+        typingIntervalRef.current = null;
+      }
+      setTypingText("");
+      abortControllerRef.current = null;
+      
+      // Remove placeholder/empty messages
+      if (activeChat?.messages?.length > 0) {
+        const lastMsg = activeChat.messages[activeChat.messages.length - 1];
+        if (lastMsg.isPlaceholder || lastMsg.text === "" || (lastMsg.role === 'tutor' && !lastMsg.text)) {
+          setActiveChat({
+            ...activeChat,
+            messages: activeChat.messages.slice(0, -1)
+          });
+        }
+      }
     }
   };
 
@@ -430,21 +842,28 @@ export default function ChatTutor({
               ref={(el) => (messageRefs.current[idx] = el)}
               style={{
                 display: "flex",
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-                marginBottom: "12px",
+                flexDirection: "column",
+                alignItems: m.role === "user" ? "flex-end" : "flex-start",
+                marginBottom: "20px",
               }}
             >
               <div
                 className={`chat-message ${m.role === "user" ? "chat-message-user" : "chat-message-assistant"}`}
                 style={{
-                  maxWidth: "75%",
-                  padding: m.role === "user" ? "8px 14px" : "12px 16px",
-                  borderRadius: m.role === "user" ? "20px 20px 4px 20px" : "18px",
-                  background: m.role === "user" ? getBubbleTheme() : "var(--surface)",
+                  maxWidth: "80%",
+                  padding: m.role === "user" ? "12px 18px" : "12px 16px",
+                  borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  background: m.role === "user" 
+                    ? getBubbleTheme()
+                    : "var(--surface)",
                   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
                   fontSize: "15px",
-                  boxShadow: m.role === "user" ? "0 2px 8px rgba(102, 126, 234, 0.3)" : "none",
+                  lineHeight: "1.5",
+                  boxShadow: m.role === "user" 
+                    ? "0 4px 12px rgba(102, 126, 234, 0.25), 0 2px 4px rgba(102, 126, 234, 0.15)"
+                    : "none",
                   color: m.role === "user" ? "#ffffff" : "var(--text)",
+                  border: "none",
                 }}
               >
                 {/* Only show label for Gini (tutor/assistant), not for user */}
@@ -452,14 +871,17 @@ export default function ChatTutor({
                   <div
                     style={{
                       fontSize: "12px",
-                      fontWeight: 600,
+                      fontWeight: 700,
                       marginBottom: "4px",
-                      opacity: 0.8,
+                      color: "var(--accent)",
                       display: "flex",
                       alignItems: "center",
-                      gap: "8px",
+                      gap: "6px",
                     }}
                   >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
                     <span>Gini</span>
                     {isPlaceholder && (
                       <span style={{
@@ -568,17 +990,282 @@ export default function ChatTutor({
                       </ReactMarkdown>
                       {showTyping && <span style={{ opacity: 0.5, animation: "blink 1s infinite", marginLeft: "2px" }}>▊</span>}
                     </>
+                  ) : editingMessageIndex === idx ? (
+                    // Edit mode for user messages
+                    <div>
+                      <textarea
+                        value={editedText}
+                        onChange={(e) => setEditedText(e.target.value)}
+                        style={{
+                          width: "100%",
+                          minHeight: "60px",
+                          background: "rgba(255, 255, 255, 0.1)",
+                          color: "#ffffff",
+                          border: "1px solid rgba(255, 255, 255, 0.3)",
+                          borderRadius: "6px",
+                          padding: "8px",
+                          fontFamily: "inherit",
+                          fontSize: "15px",
+                          resize: "vertical",
+                        }}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && e.ctrlKey) {
+                            onSaveEdit();
+                          } else if (e.key === "Escape") {
+                            onCancelEdit();
+                          }
+                        }}
+                      />
+                      <div style={{ marginTop: "8px", display: "flex", gap: "6px" }}>
+                        <button
+                          onClick={onSaveEdit}
+                          disabled={!editedText.trim() || loadingAsk}
+                          style={{
+                            padding: "4px 12px",
+                            fontSize: "12px",
+                            borderRadius: "4px",
+                            background: "rgba(34, 197, 94, 0.2)",
+                            border: "1px solid rgba(34, 197, 94, 0.4)",
+                            color: "#22c55e",
+                            cursor: editedText.trim() && !loadingAsk ? "pointer" : "not-allowed",
+                            opacity: editedText.trim() && !loadingAsk ? 1 : 0.5,
+                          }}
+                        >
+                          Save & Regenerate
+                        </button>
+                        <button
+                          onClick={onCancelEdit}
+                          style={{
+                            padding: "4px 12px",
+                            fontSize: "12px",
+                            borderRadius: "4px",
+                            background: "rgba(239, 68, 68, 0.2)",
+                            border: "1px solid rgba(239, 68, 68, 0.4)",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div style={{ marginTop: "4px", fontSize: "11px", opacity: 0.7 }}>
+                        Ctrl+Enter to save • Esc to cancel
+                      </div>
+                    </div>
                   ) : (
-                    <span style={{ 
-                      whiteSpace: "pre-wrap",
-                      fontWeight: 500,
-                      color: m.role === "user" ? "#ffffff" : "var(--text)",
-                      display: "block"
-                    }}>{displayText}</span>
+                    <>
+                      {/* Display images if present */}
+                      {m.images && m.images.length > 0 && (
+                        <div style={{ marginBottom: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                          {m.images.map((imgUrl, imgIdx) => (
+                            <img
+                              key={imgIdx}
+                              src={imgUrl}
+                              alt={`Attachment ${imgIdx + 1}`}
+                              style={{
+                                maxWidth: "200px",
+                                maxHeight: "200px",
+                                borderRadius: "8px",
+                                objectFit: "cover",
+                                border: "2px solid rgba(255, 255, 255, 0.3)",
+                                cursor: "pointer",
+                              }}
+                              onClick={() => window.open(imgUrl, '_blank')}
+                              title="Click to view full size"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <span style={{ 
+                        whiteSpace: "pre-wrap",
+                        fontWeight: 500,
+                        color: m.role === "user" ? "#ffffff" : "var(--text)",
+                        display: "block"
+                      }}>{displayText}</span>
+                      {m.edited && (
+                        <span style={{
+                          display: "inline-block",
+                          marginTop: "4px",
+                          fontSize: "10px",
+                          opacity: 0.6,
+                          fontStyle: "italic"
+                        }}>
+                          (edited)
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
-                {/* Action buttons for Gini (tutor/assistant), not for user */}
-                {m.role !== "user" && !isPlaceholder && (
+              </div>
+              {/* Action buttons for user messages - below bubble, icon-only */}
+              {m.role === "user" && editingMessageIndex !== idx && !loadingAsk && (
+                <div
+                  style={{
+                    marginTop: "4px",
+                    display: "flex",
+                    gap: "4px",
+                    alignItems: "center",
+                    opacity: 0.7,
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(m.text);
+                      setCopiedMessageId(idx);
+                      setTimeout(() => setCopiedMessageId(null), 2000);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: copiedMessageId === idx ? "#22c55e" : "var(--muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "4px",
+                      borderRadius: "4px",
+                      transition: "all 0.2s",
+                      width: "24px",
+                      height: "24px",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--surface)";
+                      e.currentTarget.style.color = "var(--text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = copiedMessageId === idx ? "#22c55e" : "var(--muted)";
+                    }}
+                    title="Copy message"
+                  >
+                    {copiedMessageId === idx ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => onEditMessage(idx, m.text)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "4px",
+                      borderRadius: "4px",
+                      transition: "all 0.2s",
+                      width: "24px",
+                      height: "24px",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--surface)";
+                      e.currentTarget.style.color = "var(--text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = "var(--muted)";
+                    }}
+                    title="Edit message"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                  {messageVersions[idx] && messageVersions[idx].length > 0 && (
+                    <>
+                      {/* Previous version button */}
+                      <button
+                        onClick={() => onPreviousVersion(idx)}
+                        disabled={(currentVersionIndex[idx] ?? -1) >= messageVersions[idx].length - 1}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: (currentVersionIndex[idx] ?? -1) >= messageVersions[idx].length - 1 ? "var(--border)" : "#eab308",
+                          cursor: (currentVersionIndex[idx] ?? -1) >= messageVersions[idx].length - 1 ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "4px",
+                          borderRadius: "4px",
+                          transition: "all 0.2s",
+                          width: "24px",
+                          height: "24px",
+                          opacity: (currentVersionIndex[idx] ?? -1) >= messageVersions[idx].length - 1 ? 0.3 : 1,
+                        }}
+                        onMouseEnter={(e) => {
+                          if ((currentVersionIndex[idx] ?? -1) < messageVersions[idx].length - 1) {
+                            e.currentTarget.style.background = "var(--surface)";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                        title="Previous version (older)"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                      </button>
+                      
+                      {/* Version indicator */}
+                      <span style={{
+                        fontSize: "11px",
+                        color: "#eab308",
+                        fontWeight: 500,
+                        padding: "0 4px",
+                      }}>
+                        {(currentVersionIndex[idx] ?? -1) === -1 ? 'Latest' : `${messageVersions[idx].length - (currentVersionIndex[idx] ?? -1)}/${messageVersions[idx].length + 1}`}
+                      </span>
+                      
+                      {/* Next version button */}
+                      <button
+                        onClick={() => onNextVersion(idx)}
+                        disabled={(currentVersionIndex[idx] ?? -1) <= -1}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: (currentVersionIndex[idx] ?? -1) <= -1 ? "var(--border)" : "#eab308",
+                          cursor: (currentVersionIndex[idx] ?? -1) <= -1 ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "4px",
+                          borderRadius: "4px",
+                          transition: "all 0.2s",
+                          width: "24px",
+                          height: "24px",
+                          opacity: (currentVersionIndex[idx] ?? -1) <= -1 ? 0.3 : 1,
+                        }}
+                        onMouseEnter={(e) => {
+                          if ((currentVersionIndex[idx] ?? -1) > -1) {
+                            e.currentTarget.style.background = "var(--surface)";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                        title="Next version (newer)"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {/* Action buttons for Gini (tutor/assistant), not for user */}
+              {m.role !== "user" && !isPlaceholder && (
                   <div
                     style={{
                       marginTop: "8px",
@@ -601,12 +1288,14 @@ export default function ChatTutor({
                         cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
-                        gap: "5px",
-                        padding: "5px 10px",
+                        justifyContent: "center",
+                        padding: "6px",
                         borderRadius: "6px",
                         fontSize: "12px",
                         fontWeight: 500,
                         transition: "all 0.2s",
+                        width: "28px",
+                        height: "28px",
                       }}
                       onMouseEnter={(e) => {
                         if (copiedMessageId !== idx) {
@@ -623,20 +1312,14 @@ export default function ChatTutor({
                       title={copiedMessageId === idx ? "Copied!" : "Copy to clipboard"}
                     >
                       {copiedMessageId === idx ? (
-                        <>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                          </svg>
-                          Copied!
-                        </>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
                       ) : (
-                        <>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                          Copy
-                        </>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
                       )}
                     </button>
                     <button
@@ -799,7 +1482,6 @@ export default function ChatTutor({
                     </button>
                   </div>
                 )}
-              </div>
             </div>
           );
         })}
@@ -842,17 +1524,168 @@ export default function ChatTutor({
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: "12px",
+          borderRadius: 12,
+          padding: "16px",
           flexShrink: 0,
+          boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.08), 0 -2px 4px rgba(0, 0, 0, 0.04)",
         }}
       >
-        <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+        {/* Input row - Image/toggle column and textarea */}
+        <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+          {/* Left side - Image upload button, toggle, and preview */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {/* Image Upload Button */}
+            <button
+              onClick={() => document.getElementById('image-upload').click()}
+              disabled={uploadingImage}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                padding: "10px 12px",
+                borderRadius: "10px",
+                border: "2px solid var(--border)",
+                background: uploadedImages.length > 0 ? "rgba(124, 156, 255, 0.12)" : "var(--surface)",
+                cursor: uploadingImage ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease",
+                opacity: uploadingImage ? 0.6 : 1,
+                minHeight: "44px",
+                whiteSpace: "nowrap",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
+              }}
+              onMouseEnter={(e) => {
+                if (!uploadingImage) {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                  e.currentTarget.style.background = "rgba(124, 156, 255, 0.15)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!uploadingImage) {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.background = uploadedImages.length > 0 ? "rgba(124, 156, 255, 0.1)" : "var(--surface)";
+                }
+              }}
+              title="Add Image"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text)" }}>
+                {uploadingImage ? "Uploading..." : uploadedImages.length > 0 ? `${uploadedImages.length}` : "Image"}
+              </span>
+            </button>
+            <input
+              id="image-upload"
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleImageUpload(file);
+                  e.target.value = ''; // Reset input
+                }
+              }}
+            />
+            
+            {/* Toggle Switch for Response Mode */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "center" }}>
+              <div
+                onClick={() => setInDepthMode(!inDepthMode)}
+                style={{
+                  width: "52px",
+                  height: "28px",
+                  borderRadius: "14px",
+                  background: inDepthMode 
+                    ? getBubbleTheme()
+                    : "#4b5563",
+                  position: "relative",
+                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  cursor: "pointer",
+                  boxShadow: "inset 0 2px 4px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                }}
+              >
+                <div
+                  style={{
+                    width: "22px",
+                    height: "22px",
+                    borderRadius: "50%",
+                    background: "#fff",
+                    position: "absolute",
+                    top: "3px",
+                    left: inDepthMode ? "27px" : "3px",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+                  }}
+                />
+              </div>
+              <span style={{
+                fontSize: "10px",
+                color: inDepthMode ? "var(--accent)" : "#22c55e",
+                fontWeight: 700,
+                textAlign: "center",
+                letterSpacing: "0.3px",
+              }}>
+                {inDepthMode ? "In-Depth" : "Concise"}
+              </span>
+            </div>
+            
+            {/* Uploaded Images Preview */}
+            {uploadedImages.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {uploadedImages.map((url, idx) => (
+                  <div key={idx} style={{ position: "relative" }}>
+                    <img 
+                      src={url} 
+                      alt={`Upload ${idx + 1}`}
+                      style={{ 
+                        width: "60px", 
+                        height: "60px", 
+                        objectFit: "cover", 
+                        borderRadius: "6px",
+                        border: "2px solid var(--accent)",
+                        boxShadow: "0 2px 8px rgba(124, 156, 255, 0.3)",
+                      }} 
+                    />
+                    <button
+                      onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== idx))}
+                      style={{
+                        position: "absolute",
+                        top: "-6px",
+                        right: "-6px",
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
+                        background: "#ef4444",
+                        border: "2px solid #fff",
+                        color: "#fff",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                      }}
+                      title="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <textarea
             ref={inputRef => {
               if (inputRef) {
                 inputRef.style.height = 'auto';
-                inputRef.style.height = Math.min(inputRef.scrollHeight, 150)+ 'px';
+                const newHeight = Math.max(78, Math.min(inputRef.scrollHeight, 200));
+                inputRef.style.height = newHeight + 'px';
               }
             }}
             rows={1}
@@ -860,62 +1693,91 @@ export default function ChatTutor({
               flex: 1,
               background: "var(--input-bg)",
               color: "var(--text)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              padding: "12px",
+              border: "2px solid var(--border)",
+              borderRadius: 10,
+              padding: "14px 16px",
               resize: "none",
               fontFamily: "inherit",
               fontSize: "15px",
+              minHeight: 78,
               maxHeight: 200,
               overflowY: 'auto',
-              transition: 'height 0.1s',
+              transition: 'all 0.2s ease',
+              outline: "none",
+              boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.1)",
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = "var(--accent)";
+              e.target.style.boxShadow = "inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(102, 126, 234, 0.1)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "var(--border)";
+              e.target.style.boxShadow = "inset 0 1px 3px rgba(0, 0, 0, 0.1)";
             }}
             value={question}
             onChange={e => {
               setQuestion(e.target.value);
               if (e.target) {
                 e.target.style.height = 'auto';
-                e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+                const newHeight = Math.max(78, Math.min(e.target.scrollHeight, 200));
+                e.target.style.height = newHeight + 'px';
               }
             }}
-            placeholder="Ask your tutor anything..."
+            placeholder={loadingAsk ? "Generating response... (you can type your next question)" : "Ask your tutor anything... (Enter to send • Shift+Enter for new line)"}
             onKeyDown={e => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey && !loadingAsk) {
                 e.preventDefault();
                 onAsk();
               }
             }}
           />
           <button
-            onClick={onAsk}
-            disabled={loadingAsk || !question.trim()}
+            onClick={loadingAsk ? onStopGeneration : onAsk}
+            disabled={!loadingAsk && !question.trim()}
             style={{
-              padding: "12px 20px",
+              minHeight: 78,
+              width: 60,
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
-              gap: "6px",
-              borderRadius: "8px",
+              justifyContent: "center",
+              gap: "4px",
+              borderRadius: "10px",
+              background: loadingAsk 
+                ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
+                : question.trim() 
+                  ? getBubbleTheme()
+                  : "var(--surface)",
+              border: "2px solid " + (loadingAsk ? "#ef4444" : question.trim() ? "transparent" : "var(--border)"),
+              color: loadingAsk || question.trim() ? "#fff" : "var(--muted)",
+              padding: "8px",
+              cursor: (!loadingAsk && !question.trim()) ? "not-allowed" : "pointer",
+              transition: "all 0.2s ease",
+              boxShadow: (loadingAsk || question.trim()) 
+                ? "0 4px 12px rgba(102, 126, 234, 0.3)"
+                : "0 1px 3px rgba(0, 0, 0, 0.08)",
             }}
           >
             {loadingAsk ? (
               <>
-                <div
-                  style={{
-                    width: "16px",
-                    height: "16px",
-                    border: "2px solid transparent",
-                    borderTop: "2px solid currentColor",
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                  }}
-                />
-                <span>Thinking…</span>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <rect x="6" y="4" width="4" height="16"></rect>
+                  <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+                <span style={{ fontSize: "11px", fontWeight: 600 }}>Stop</span>
               </>
             ) : (
               <>
                 <svg
-                  width="16"
-                  height="16"
+                  width="18"
+                  height="18"
                   viewBox="0 0 24 24"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
@@ -928,20 +1790,10 @@ export default function ChatTutor({
                     strokeLinejoin="round"
                   />
                 </svg>
-                <span>Send</span>
+                <span style={{ fontSize: "11px", fontWeight: 600 }}>Send</span>
               </>
             )}
           </button>
-        </div>
-        <div
-          style={{
-            fontSize: "11px",
-            color: "var(--muted)",
-            marginTop: "6px",
-            textAlign: "center",
-          }}
-        >
-          Press Enter to send • Shift+Enter for new line
         </div>
       </div>
 
