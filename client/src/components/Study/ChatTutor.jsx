@@ -849,6 +849,12 @@ export default function ChatTutor({
       >
         <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
           <textarea
+            ref={inputRef => {
+              if (inputRef) {
+                inputRef.style.height = 'auto';
+                inputRef.style.height = Math.min(inputRef.scrollHeight, 150)+ 'px';
+              }
+            }}
             rows={1}
             style={{
               flex: 1,
@@ -859,12 +865,21 @@ export default function ChatTutor({
               padding: "12px",
               resize: "none",
               fontFamily: "inherit",
-              fontSize: "15px", 
+              fontSize: "15px",
+              maxHeight: 200,
+              overflowY: 'auto',
+              transition: 'height 0.1s',
             }}
             value={question}
-            onChange={(e) => setQuestion(e.target.value)}
+            onChange={e => {
+              setQuestion(e.target.value);
+              if (e.target) {
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+              }
+            }}
             placeholder="Ask your tutor anything..."
-            onKeyDown={(e) => {
+            onKeyDown={e => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 onAsk();
