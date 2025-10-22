@@ -261,23 +261,24 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, opacity: animateIn ? 1 : 0, transition: 'opacity 180ms ease' }}>
-  <div style={{ width: 'min(760px, 94vw)', boxSizing:'border-box', maxWidth: 760, display:'flex', flexDirection:'column', background: 'var(--panel)', border:'1px solid var(--border)', borderRadius: 12, overflow:'hidden', transform: animateIn ? 'scale(1)' : 'scale(0.96)', opacity: animateIn ? 1 : 0, transition: 'transform 200ms ease, opacity 200ms ease' }}>
+  <div style={{ width: 'min(1200px, 94vw)', boxSizing:'border-box', maxWidth: 1200, display:'flex', flexDirection:'column', background: 'var(--panel)', border:'1px solid var(--border)', borderRadius: 12, overflow:'hidden', transform: animateIn ? 'scale(1)' : 'scale(0.96)', opacity: animateIn ? 1 : 0, transition: 'transform 200ms ease, opacity 200ms ease' }}>
         <div style={{ background:'linear-gradient(135deg, var(--accent), var(--accent2))', padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h3 style={{ margin:0, color:'#0a0f25' }}>Your Profile</h3>
           <button onClick={onClose} style={{ background:'var(--input-bg)', border:'1px solid var(--border)', color:'var(--muted)', padding:'6px 10px', borderRadius:6, cursor:'pointer' }}>Close</button>
         </div>
-        <div style={{ padding:20 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'30% 70%', gap:20, alignItems:'stretch' }}>
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', gap:12, alignSelf:'center' }}>
-            <div style={{ position:'relative', width:180, height:180 }}>
+        <div style={{ padding:'24px', display:'flex', flexDirection:'column', maxHeight:'80vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', gap:24, alignItems:'stretch', minHeight:0 }}>
+          {/* Avatar Section - 25% */}
+          <div style={{ flex:'0 0 25%', minWidth:200, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, paddingRight:20 }}>
+            <div style={{ position:'relative', width:160, height:160 }}>
             {avatarUrl ? (
-              <img src={avatarUrl} alt="avatar" onError={(e)=>{ e.currentTarget.style.display='none'; }} style={{ width:180, height:180, borderRadius:'50%', objectFit:'cover', border:'2px solid var(--border)' }} />
+              <img src={avatarUrl} alt="avatar" onError={(e)=>{ e.currentTarget.style.display='none'; }} style={{ width:160, height:160, borderRadius:'50%', objectFit:'cover', border:'3px solid var(--border)' }} />
             ) : (
-              <div style={{ width:180, height:180, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', color:'#0a0f25', fontWeight:900, fontSize:64, border:'2px solid var(--border)' }}>
+              <div style={{ width:160, height:160, borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', color:'#0a0f25', fontWeight:900, fontSize:64, border:'3px solid var(--border)' }}>
                 {initials}
               </div>
             )}
-            <button onClick={()=>setShowAvatarMenu(v=>!v)} title="Edit avatar" style={{ position:'absolute', right:12, bottom:12, width:44, height:44, borderRadius:'50%', background:'var(--input-bg)', border:'1px solid var(--border)', color:'var(--text)', cursor:'pointer', display:'grid', placeItems:'center' }}>
+            <button onClick={()=>setShowAvatarMenu(v=>!v)} title="Edit avatar" style={{ position:'absolute', right:0, bottom:0, width:36, height:36, borderRadius:'50%', background:'var(--input-bg)', border:'2px solid var(--border)', color:'var(--text)', cursor:'pointer', display:'grid', placeItems:'center' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor"/>
                 <path d="M20.71 7.04a1.003 1.003 0 000-1.42l-2.34-2.34a1.003 1.003 0 00-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" fill="currentColor"/>
@@ -296,15 +297,15 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
               </div>
             )}
             </div>
-            <div style={{ textAlign:'center' }}>
-              <div style={{ color:'var(--text)', fontWeight:800, fontSize:22 }}>{user?.name}</div>
-              <div style={{ color:'var(--muted)', fontSize:13 }}>{user?.email}</div>
+            <div style={{ textAlign:'center', width:'100%' }}>
+              <div style={{ color:'var(--text)', fontWeight:800, fontSize:22, marginBottom:6 }}>{user?.name}</div>
+              <div style={{ color:'var(--muted)', fontSize:12, wordBreak:'break-all' }}>{user?.email}</div>
             </div>
           </div>
-          <div style={{ maxWidth: 480, width:'100%' }}>
-            {msg && <div style={{ background:'var(--success-bg)', border:'1px solid var(--success-border)', color:'var(--success-text)', padding:10, borderRadius:10, marginBottom:14 }}>{msg}</div>}
-            {err && <div style={{ background:'var(--error-bg)', border:'1px solid var(--error-border)', color:'var(--error-text)', padding:10, borderRadius:10, marginBottom:14 }}>{err}</div>}
-            <div style={{ display:'grid', gap:28 }}>
+          {/* Preferences Section - 37.5% */}
+          <div style={{ flex:'1', minWidth:300, display:'flex', flexDirection:'column', gap:16, paddingLeft:16, paddingRight:20 }}>
+            <div style={{ marginBottom:4, color:'var(--text)', fontWeight:700, fontSize:16 }}>Preferences</div>
+            <div style={{ display:'grid', gap:18 }}>
               {/* Appearance section */}
               <div>
                 <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Appearance</div>
@@ -325,7 +326,7 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
                   <select 
                     value={voicePref} 
                     onChange={(e) => handleVoiceChange(e.target.value)}
-                    style={{ flex:1, padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)' }}
+                    style={{ flex:1, padding:'8px 10px', background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', fontSize:'13px', maxWidth:'85%' }}
                   >
                     {availableVoices.length === 0 ? (
                       <option value="">Loading voices...</option>
@@ -416,22 +417,22 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
               <div>
                 <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Message Bubble Theme</div>
                 <label style={{ display:'block', color:'var(--muted)', marginBottom:10, fontSize:12 }}>Choose your message bubble appearance</label>
-                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:8 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:10, marginBottom:10 }}>
                   {Object.entries(bubbleThemes).map(([key, theme]) => (
                     <button
                       key={key}
                       onClick={() => handleBubbleThemeChange(key)}
                       title={theme.name}
                       style={{
-                        width: 44,
-                        height: 44,
+                        width: '100%',
+                        aspectRatio: '1',
                         borderRadius: '50%',
                         background: theme.background,
                         border: bubbleTheme === key ? '3px solid var(--accent)' : '2px solid var(--border)',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                         boxShadow: bubbleTheme === key ? '0 0 0 2px var(--panel), 0 0 12px rgba(124, 156, 255, 0.5)' : 'none',
-                        transform: bubbleTheme === key ? 'scale(1.15)' : 'scale(1)',
+                        transform: bubbleTheme === key ? 'scale(1.1)' : 'scale(1)',
                       }}
                       onMouseEnter={(e) => {
                         if (bubbleTheme !== key) {
@@ -452,17 +453,25 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
                   Selected: <strong style={{ color:'var(--text)' }}>{bubbleThemes[bubbleTheme].name}</strong>
                 </div>
               </div>
+            </div>
+          </div>
+          {/* Contact & Security Section - 37.5% */}
+          <div style={{ flex:'1', minWidth:300, display:'flex', flexDirection:'column', gap:16, paddingLeft:16 }}>
+            <div style={{ marginBottom:4, color:'var(--text)', fontWeight:700, fontSize:16 }}>Contact & Security</div>
+            {msg && <div style={{ background:'var(--success-bg)', border:'1px solid var(--success-border)', color:'var(--success-text)', padding:10, borderRadius:10 }}>{msg}</div>}
+            {err && <div style={{ background:'var(--error-bg)', border:'1px solid var(--error-border)', color:'var(--error-text)', padding:10, borderRadius:10 }}>{err}</div>}
+            <div style={{ display:'grid', gap:18 }}>
               <div>
             <div style={{ marginBottom:8, color:'var(--text)', fontWeight:600 }}>Contact</div>
             <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Email</label>
-                <input value={user?.email || ''} disabled readOnly style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--muted)', marginBottom:12 }} />
+                <input value={user?.email || ''} disabled readOnly style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--muted)', marginBottom:12, boxSizing:'border-box' }} />
             <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Mobile number</label>
             {mobileLocked ? (
               <input
                 value={mobile}
                 onChange={(e)=>setMobile(e.target.value)}
                 placeholder="e.g. +911234567890"
-                    style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12 }}
+                    style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12, boxSizing:'border-box' }}
                 disabled
                 readOnly
               />
@@ -471,7 +480,7 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
                 <select
                   value={countryDial}
                   onChange={(e)=>setCountryDial(e.target.value)}
-                      style={{ padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', minWidth:110 }}
+                      style={{ padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', minWidth:110, boxSizing:'border-box' }}
                 >
                   {COUNTRY_OPTIONS.map(opt => (
                     <option key={opt.code} value={opt.dial}>+{opt.dial} {opt.code}</option>
@@ -481,7 +490,7 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
                   value={mobile}
                   onChange={(e)=>setMobile(e.target.value)}
                   placeholder="Enter mobile number"
-                      style={{ flex:1, padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)' }}
+                      style={{ flex:1, padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', boxSizing:'border-box' }}
                 />
               </div>
             )}
@@ -503,17 +512,17 @@ export default function ProfileModal({ open, onClose, themePref, setThemePref })
                 {user?.hasPassword ? (
                   <>
                     <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Current password</label>
-                    <input type="password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} placeholder="Current password" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12 }} />
+                    <input type="password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} placeholder="Current password" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12, boxSizing:'border-box' }} />
                   </>
                 ) : (
                   <div style={{ color:'var(--muted)', fontSize:12, marginBottom:8 }}>No password set (OAuth account). You can set a password below.</div>
                 )}
                 <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>New password</label>
-                <input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} placeholder="At least 6 characters" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12 }} />
+                <input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} placeholder="At least 6 characters" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:12, boxSizing:'border-box' }} />
                 {!user?.hasPassword && (
                   <>
                     <label style={{ display:'block', color:'var(--muted)', marginBottom:6, fontSize:12 }}>Confirm new password</label>
-                    <input type="password" value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} placeholder="Re-enter new password" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:8 }} />
+                    <input type="password" value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} placeholder="Re-enter new password" style={{ width:'100%', padding:10, background:'var(--input-bg)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', marginBottom:8, boxSizing:'border-box' }} />
                     {confirmPassword && confirmPassword !== newPassword && (
                       <div style={{ color:'#f36', fontSize:12, marginBottom:8 }}>Passwords do not match.</div>
                     )}

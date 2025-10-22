@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 export default function ChatTutor({
   api,
@@ -68,16 +70,17 @@ export default function ChatTutor({
   
   // Auto-scroll to bottom when opening a chat
   useEffect(() => {
-    if (activeChat && activeChat.messages && activeChat.messages.length > 0) {
-      // Small delay to ensure messages are rendered
-      setTimeout(() => {
-        const chatContainer = document.querySelector('[style*="overflow-y: auto"]');
-        if (chatContainer) {
-          chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-      }, 100);
+    if (activeChat && activeChat.messages && activeChat.messages.length > 0 && chatContainerRef.current) {
+      // Use requestAnimationFrame to ensure DOM is fully rendered
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        }, 150);
+      });
     }
-  }, [activeChatId]); // Only when chat changes, not on every message
+  }, [activeChatId, activeChat?.messages?.length]); // Trigger on chat change and when messages load
   
   // Debug loadingAsk state
   useEffect(() => {
@@ -850,7 +853,7 @@ export default function ChatTutor({
               <div
                 className={`chat-message ${m.role === "user" ? "chat-message-user" : "chat-message-assistant"}`}
                 style={{
-                  maxWidth: "80%",
+                  maxWidth: m.role === "user" ? "80%" : "95%",
                   padding: m.role === "user" ? "12px 18px" : "12px 16px",
                   borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                   background: m.role === "user" 
@@ -908,7 +911,8 @@ export default function ChatTutor({
                   ) : (m.role === "tutor" || m.role === "assistant") ? (
                     <>
                       <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
                         components={{
                           // Style markdown elements to match chat theme
                           p: ({node, children, ...props}) => {
@@ -1282,9 +1286,8 @@ export default function ChatTutor({
                       }}
                       style={{
                         background: copiedMessageId === idx ? "rgba(34, 197, 94, 0.15)" : "none",
-                        border: "1px solid",
-                        borderColor: copiedMessageId === idx ? "rgba(34, 197, 94, 0.4)" : "rgba(124, 156, 255, 0.2)",
-                        color: copiedMessageId === idx ? "#22c55e" : "var(--text)",
+                        border: "none",
+                        color: copiedMessageId === idx ? "#22c55e" : "var(--muted)",
                         cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
@@ -1300,13 +1303,13 @@ export default function ChatTutor({
                       onMouseEnter={(e) => {
                         if (copiedMessageId !== idx) {
                           e.currentTarget.style.background = "rgba(124, 156, 255, 0.1)";
-                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.4)";
+                          e.currentTarget.style.color = "var(--accent)";
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (copiedMessageId !== idx) {
                           e.currentTarget.style.background = "none";
-                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.2)";
+                          e.currentTarget.style.color = "var(--muted)";
                         }
                       }}
                       title={copiedMessageId === idx ? "Copied!" : "Copy to clipboard"}
@@ -1434,9 +1437,8 @@ export default function ChatTutor({
                       }}
                       style={{
                         background: speakingMessageId === idx ? "rgba(239, 68, 68, 0.15)" : "none",
-                        border: "1px solid",
-                        borderColor: speakingMessageId === idx ? "rgba(239, 68, 68, 0.4)" : "rgba(124, 156, 255, 0.2)",
-                        color: speakingMessageId === idx ? "#ef4444" : "var(--text)",
+                        border: "none",
+                        color: speakingMessageId === idx ? "#ef4444" : "var(--muted)",
                         cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
@@ -1450,13 +1452,13 @@ export default function ChatTutor({
                       onMouseEnter={(e) => {
                         if (speakingMessageId !== idx) {
                           e.currentTarget.style.background = "rgba(124, 156, 255, 0.1)";
-                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.4)";
+                          e.currentTarget.style.color = "var(--accent)";
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (speakingMessageId !== idx) {
                           e.currentTarget.style.background = "none";
-                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.2)";
+                          e.currentTarget.style.color = "var(--muted)";
                         }
                       }}
                       title={speakingMessageId === idx ? "Stop reading" : "Read aloud"}
@@ -1607,6 +1609,9 @@ export default function ChatTutor({
                   cursor: "pointer",
                   boxShadow: "inset 0 2px 4px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.08)",
                   border: "1px solid rgba(255, 255, 255, 0.1)",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 3px",
                 }}
               >
                 <div
@@ -1616,8 +1621,7 @@ export default function ChatTutor({
                     borderRadius: "50%",
                     background: "#fff",
                     position: "absolute",
-                    top: "3px",
-                    left: inDepthMode ? "27px" : "3px",
+                    left: inDepthMode ? "calc(100% - 25px)" : "3px",
                     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                     boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
                   }}
