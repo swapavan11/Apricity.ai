@@ -859,27 +859,7 @@ export default function ChatTutor({
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Warning banner when no PDF selected */}
-      {selected === "all" && (
-        <div style={{
-          background: "rgba(234, 179, 8, 0.15)",
-          border: "1px solid rgba(234, 179, 8, 0.4)",
-          borderRadius: "8px",
-          padding: "2px",
-          // marginBottom: "8px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          fontSize: "12px",
-          color: "#eab308",
-        }}>
-          <span style={{ fontSize: "16px" }}>💡</span>
-          <span>
-            <strong>General Chat Mode:</strong> I'm ready for general questions. 
-            Want to discuss a specific PDF? Select one from above!
-          </span>
-        </div>
-      )}
+      
       
       
       {/* Chat display area with scroll-to-bottom control */}
@@ -891,25 +871,87 @@ export default function ChatTutor({
             overflowY: "auto",
             background: "var(--surface)",
             border: "1px solid var(--border)",
+            borderBottom: "3px solid #0055ffff",
             borderRadius: 10,
+            // borderBottom: "none",
+            borderBottomLeftRadius: 0,
+            borderBottomRightRadius: 0,
             padding: "14px",
             marginBottom: "12px",
             display: "flex",
             flexDirection: "column",
             gap: "12px",
+            position: "relative"
           }}
         >
+
+          {/* Warning banner when no PDF selected */}
+      
+        {selected === "all" && (
+          !activeChat?.messages?.length && !loadingAsk ? (
+            <div style={{
+              background: "rgba(234, 179, 8, 0.15)",
+              border: "1px solid rgba(234, 179, 8, 0.4)",
+              borderRadius: "8px",
+              padding: "4px 10px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "12px",
+              color: "#eab308",
+              marginTop: "0px",
+              marginBottom: "18px",
+              width: "100%",
+              boxSizing: "border-box"
+            }}>
+              <span style={{ fontSize: "16px" }}>💡</span>
+              <span>
+                <strong>General Chat Mode:</strong> I'm ready for general questions. Want to discuss a specific PDF? Select one from above!
+              </span>
+            </div>
+          ) : (
+            <div style={{
+              position: "absolute",
+              top: 18,
+              left: 18,
+              zIndex: 10,
+              background: "rgba(234, 179, 8, 0.15)",
+              border: "1px solid rgba(234, 179, 8, 0.4)",
+              borderRadius: "8px",
+              padding: "6px 14px 6px 10px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "12px",
+              color: "#eab308",
+              boxShadow: "0 2px 8px rgba(234,179,8,0.08)",
+              pointerEvents: "none",
+              minWidth: 0,
+              maxWidth: "320px",
+              width: "auto",
+              boxSizing: "border-box"
+            }}>
+              <span style={{ fontSize: "16px" }}>💡</span>
+              <span style={{ whiteSpace: "pre-line", fontWeight: 500 }}>
+                <strong>General Chat Mode</strong>
+              </span>
+            </div>
+          )
+        )}
         {!activeChat?.messages?.length && !loadingAsk && (
           <div
             style={{
               color: "var(--muted)",
               textAlign: "center",
-              marginTop: "50px",
+              marginTop: selected === "all" ? "0px" : "50px",
             }}
           >
             No messages yet. Start a conversation with your tutor below.
           </div>
         )}
+        
+
+        
 
         {activeChat?.messages?.map((m, idx) => {
           const isLastMessage = idx === activeChat.messages.length - 1;
@@ -932,7 +974,7 @@ export default function ChatTutor({
                 className={`chat-message ${m.role === "user" ? "chat-message-user" : "chat-message-assistant"}`}
                 style={{
                   maxWidth: m.role === "user" ? "80%" : "95%",
-                  padding: m.role === "user" ? "12px 18px" : "12px 16px",
+                  padding: m.role === "user" ? "12px 18px" : "0px",
                   borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                   background: m.role === "user" 
                     ? getBubbleTheme()
@@ -1101,7 +1143,7 @@ export default function ChatTutor({
                               </SyntaxHighlighter>
                             );
                           },
-                          blockquote: ({node, ...props}) => <blockquote style={{ borderLeft: "3px solid var(--accent)", paddingLeft: "12px", marginLeft: "0", opacity: 0.9, fontStyle: "italic" }} {...props} />,
+                          blockquote: ({node, ...props}) => <blockquote style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 0, marginLeft: "0", opacity: 0.9, fontStyle: "italic" }} {...props} />,
                           strong: ({node, ...props}) => <strong style={{ fontWeight: 700 }} {...props} />,
                           em: ({node, ...props}) => <em style={{ fontStyle: "italic" }} {...props} />,
                           a: ({node, ...props}) => <a style={{ color: "var(--accent)", textDecoration: "underline" }} {...props} />,
@@ -1406,7 +1448,7 @@ export default function ChatTutor({
               {m.role !== "user" && !isPlaceholder && (
                   <div
                     style={{
-                      marginTop: "8px",
+                      // marginTop: "8px",
                       display: "flex",
                       gap: "8px",
                       alignItems: "center",
@@ -1661,9 +1703,13 @@ export default function ChatTutor({
       {/* Input area */}
       <div
         style={{
-          background: "var(--surface)",
+          background: "#03183bff",
+          // background: "var(--surface)",
           border: "1px solid var(--border)",
+          borderTop: "none",
           borderRadius: 12,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
           padding: "8px 14px",
           flexShrink: 0,
           boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.08), 0 -2px 4px rgba(0, 0, 0, 0.04)",
@@ -1740,7 +1786,7 @@ export default function ChatTutor({
                 // padding: "10px 12px",
                 borderRadius: "10px",
                 border: "2px solid var(--border)",
-                background: uploadedImages.length > 0 ? "rgba(124, 156, 255, 0.12)" : "var(--surface)",
+                background: uploadedImages.length > 0 ? "rgba(124, 156, 255, 0.12)" : "var(--border)",
                 cursor: uploadingImage ? "not-allowed" : "pointer",
                 transition: "all 0.2s ease",
                 opacity: uploadingImage ? 0.6 : 1,
@@ -1795,7 +1841,8 @@ export default function ChatTutor({
                   borderRadius: "14px",
                   background: inDepthMode 
                     ? getBubbleTheme()
-                    : "#4b5563",
+                    : 'var(--surface)',
+                    // : "#4b5563",
                   position: "relative",
                   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                   cursor: "pointer",
@@ -1836,7 +1883,8 @@ export default function ChatTutor({
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            background: 'var(--surface)',
+             background: "#03183bff",
+            // background: 'var(--surface)',
             borderRadius: 12,
             // border: '2px solid var(--border)',
             // padding: '10px 14px',
@@ -1865,6 +1913,7 @@ export default function ChatTutor({
                 transition: 'all 0.2s ease',
                 outline: "none",
                 boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.1)",
+                '::placeholder': { color: '#fff' }
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = "var(--accent)";
@@ -1901,9 +1950,9 @@ export default function ChatTutor({
                 e.preventDefault();
               }}
               onKeyDown={e => {
-                if (e.key === "Enter" && !e.shiftKey && !loadingAsk) {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  onAsk();
+                  if (!loadingAsk) onAsk();
                 }
               }}
             />
@@ -1919,7 +1968,7 @@ export default function ChatTutor({
                 justifyContent: "center",
                 gap: "4px",
                 borderRadius: "10px",
-                background: isListening ? 'rgba(34,197,94,0.12)' : 'var(--border)',
+                background: isListening ? 'rgba(34,197,94,0.12)' : 'var(--surface)',
                 border: isListening ? '2px solid #22c55e' : '2px solid var(--border)',
                 color: isListening ? '#22c55e' : 'var(--muted)',
                 padding: "8px",
@@ -1940,7 +1989,7 @@ export default function ChatTutor({
             </button>
             <button
               onClick={loadingAsk ? onStopGeneration : onAsk}
-              disabled={!loadingAsk && !question.trim()}
+              disabled={loadingAsk || !question.trim()}
               style={{
                 minHeight: 44,
                 width: 60,

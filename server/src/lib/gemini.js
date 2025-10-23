@@ -1,55 +1,4 @@
-// import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// const apiKey = process.env.GEMINI_API_KEY;
-// if (!apiKey) {
-//   console.warn('GEMINI_API_KEY not set. Please add it to your .env');
-// }
-
-// export function getGemini(model = 'gemini-1.5-flash-latest') {
-//   const genAI = new GoogleGenerativeAI(apiKey);
-//   return genAI.getGenerativeModel({ model });
-// }
-
-// export async function generateText({ prompt, system, model = 'gemini-1.5-flash-latest', temperature = 0.2 }) {
-//   const m = getGemini(model);
-//   const fullPrompt = [
-//     system ? `System: ${system}` : null,
-//     prompt,
-//   ].filter(Boolean).join('\n\n');
-//   const result = await m.generateContent(fullPrompt);
-//   const response = await result.response;
-//   return response.text();
-// }
-
-// export async function embedTexts(texts, { model = 'text-embedding-004' } = {}) {
-//   const genAI = new GoogleGenerativeAI(apiKey);
-//   const inputs = texts.map(t => ({ content: { parts: [{ text: String(t || '') }] } }));
-//   // Prefer batch embeddings when available
-//   try {
-//     const res = await genAI.batchEmbedContents({ model, requests: inputs });
-//     if (Array.isArray(res?.embeddings)) {
-//       return res.embeddings.map(e => e?.values || e?.embedding?.values || []);
-//     }
-//   } catch (e) {
-//     // Fallback to per-text embedding
-//     const out = [];
-//     for (const t of texts) {
-//       try {
-//         const single = await genAI.embedContent({ model, content: { parts: [{ text: String(t || '') }] } });
-//         out.push(single?.embedding?.values || []);
-//       } catch (e2) {
-//         out.push([]);
-//       }
-//     }
-//     return out;
-//   }
-//   return texts.map(() => []);
-// }
-
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { config } from "./config.js";
-
 // --- Load API Key ---
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -71,19 +20,12 @@ const FALLBACK_MODELS = [
  * Get a Gemini model instance.
  * @param {string} model - Model name (default: gemini-1.5-flash)
  */
-export function getGemini(model = DEFAULT_MODEL) {
+function getGemini(model = DEFAULT_MODEL) {
   return genAI.getGenerativeModel({ model });
 }
 
-/**
- * Generate text or content using Gemini.
- * @param {object} options
- * @param {string} options.prompt - Main user prompt.
- * @param {string} [options.system] - Optional system-level instruction.
- * @param {string} [options.model] - Model name (default: gemini-1.5-flash).
- * @param {number} [options.temperature] - Creativity control (0–1 range).
- * @returns {Promise<string>} Generated text content.
- */
+import { config } from "./config.js";
+import { localEmbedTexts } from "./local-embed.js";
 async function withRetry(fn, { attempts = 3, baseDelayMs = 500 }) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
@@ -204,21 +146,13 @@ export async function embedTexts(
   texts,
   { model = "text-embedding-004" } = {}
 ) {
-  const out = [];
-  for (const t of texts) {
-    const text = String(t || "").slice(0, config.EMBEDDINGS_MAX_CHARS);
-    try {
-      const single = await genAI.embedContent({
-        model,
-        content: { parts: [{ text }] },
-      });
-      out.push(single?.embedding?.values || []);
-    } catch (err) {
-      console.error("Embedding failed for:", text.slice(0,80), err?.message || err);
-      out.push([]);
-    }
+  // Use local embedding server only
+  try {
+    return await localEmbedTexts(texts);
+  } catch (err) {
+    console.error("Local embedding server failed:", err?.message || err);
+    return texts.map(() => []);
   }
-  return out;
 }
 
 // const models = await genAI.listModels();

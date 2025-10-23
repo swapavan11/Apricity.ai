@@ -8,6 +8,7 @@ import mime from 'mime';
 import Document from '../models/Document.js';
 import User from '../models/User.js';
 import { embedTexts } from '../lib/gemini.js';
+import { localEmbedTextsInDepth } from '../lib/local-embed.js';
 import { config } from '../lib/config.js';
 import { uploadPDF } from '../lib/cloudinary.js';
 import { authenticateToken, requireVerified } from '../middleware/auth.js';
@@ -157,15 +158,22 @@ router.post('/', upload.single('pdf'), async (req, res) => {
       }
     }
 
-    // Process chunks
-    const chunks = pageTexts.map((t, i) => ({ page: i + 1, text: t || '' }));
+    // Process chunks with in-depth context (each page + neighbors)
+    const cleanedPageTexts = pageTexts.map(t => (t || '').replace(/\s+/g, ' ').trim());
+    const chunks = cleanedPageTexts.map((text, i) => ({ page: i + 1, text }));
     if (config.EMBEDDINGS_ENABLED) {
-      // Generate embeddings in small batches to avoid token limits
-      const batchSize = 16;
+      const batchSize = 8;
       for (let i = 0; i < chunks.length; i += batchSize) {
         const batch = chunks.slice(i, i + batchSize);
         try {
-          const vecs = await embedTexts(batch.map(b => b.text));
+          // For in-depth embedding, combine each page with its neighbors
+          const batchTexts = batch.map((b, j) => {
+            const globalIdx = i + j;
+            const prev = cleanedPageTexts[globalIdx - 1] || '';
+            const next = cleanedPageTexts[globalIdx + 1] || '';
+            return [prev, b.text, next].filter(Boolean).join(' ');
+          });
+          const vecs = await localEmbedTextsInDepth(batchTexts);
           (vecs || []).forEach((v, j) => { if (Array.isArray(v)) batch[j].embedding = v; });
         } catch (e) {
           // Continue without embeddings

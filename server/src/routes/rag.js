@@ -101,22 +101,43 @@ function cosineSimilarityVec(a, b) {
   for (let i=0;i<len;i++) { const x=a[i], y=b[i]; dot+=x*y; na+=x*x; nb+=y*y }
   return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1)
 }
+const levenshtein = (a, b) => {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+};
+
 function lexicalScore(a, b) {
-  const textA = (a || '').toLowerCase()
-  const textB = (b || '').toLowerCase()
-  
-  // Simple word overlap
-  const wordsA = textA.split(/\W+/).filter(w => w.length > 2)
-  const wordsB = textB.split(/\W+/).filter(w => w.length > 2)
-  const setA = new Set(wordsA)
-  const setB = new Set(wordsB)
-  const intersection = [...setA].filter(x => setB.has(x))
-  const wordScore = intersection.length / Math.sqrt(Math.max(setA.size * setB.size, 1))
-  
-  // Substring matching for partial matches
-  const substringScore = textA.includes(textB.slice(0, 20)) || textB.includes(textA.slice(0, 20)) ? 0.3 : 0
-  
-  return Math.max(wordScore, substringScore)
+  const textA = (a || '').toLowerCase();
+  const textB = (b || '').toLowerCase();
+  const wordsA = textA.split(/\W+/).filter(w => w.length > 2);
+  const wordsB = textB.split(/\W+/).filter(w => w.length > 2);
+  const setA = new Set(wordsA);
+  const setB = new Set(wordsB);
+  // Fuzzy intersection: allow Levenshtein distance <= 1 for word match
+  const fuzzyIntersection = [...setA].filter(x =>
+    [...setB].some(y => x === y || levenshtein(x, y) <= 1)
+  );
+  const wordScore = fuzzyIntersection.length / Math.sqrt(Math.max(setA.size * setB.size, 1));
+  // Substring matching for partial matches (more tolerant)
+  const substringScore = (textA.includes(textB.slice(0, 12)) || textB.includes(textA.slice(0, 12))) ? 0.5 : 0;
+  return Math.max(wordScore, substringScore);
 }
 
 // Ask endpoint: require authentication to use user-owned documents and persist chats
@@ -237,25 +258,27 @@ router.post('/ask', authenticateToken, async (req, res) => {
   let answer;
   // Use PDF content if we have any relevant citations with decent scores
   // Lower the threshold to be more inclusive of PDF content
-  if (avgScore < 0.005 && allowGeneral) {
-    // Score is too low, use general knowledge with context that user has a PDF
-    // Use inDepthMode for more detailed answers
-    const system = inDepthMode
+  // Always use Gemini's generative power for the best answer, even if PDF is weak or missing
+  // Detect greetings or small talk for concise response
+  const greetingRegex = /^(hi|hello|hey|greetings|good (morning|afternoon|evening)|what'?s up|how are you|how's it going|yo|sup|namaste|salaam|hola|bonjour|ciao|hallo|hey there)[!.,\s]*$/i;
+  let system, prompt;
+  if (greetingRegex.test(query.trim())) {
+    system = `You are Gini, an AI tutor from Apricity.ai. If the user greets you or makes small talk, respond concisely and warmly (1-2 sentences max). Do not give a long or detailed answer for greetings.`;
+    prompt = query;
+  } else if (contexts.length === 0 || avgScore < 0.01) {
+    // No relevant PDF info or very weak match: use general knowledge
+    system = inDepthMode
       ? `You are Gini, an AI tutor from Apricity.ai. The user has uploaded a PDF but their question isn't directly related to it.\n\nGuidelines:\n- Give **very detailed, comprehensive answers** (4-8 paragraphs or more if needed)\n- Include step-by-step explanations, relevant examples, and deeper context\n- Break down complex ideas into simple parts, and elaborate on each\n- Use analogies, diagrams (describe them), and real-world applications when possible\n- Be conversational and natural in your tone\n- Only mention your identity if directly asked about who you are\n\nFocus on clarity and ensuring the student understands.`
-  : `You are Gini, an AI tutor from Apricity.ai. The user has uploaded a PDF but their question isn't directly related to it.\n\nGuidelines:\n- Give **medium-length answers** (2–4 paragraphs; do NOT give just a short summary or 1–2 sentences)\n- Be clear and direct - get to the point quickly\n- Include relevant examples when helpful\n- Break down complex ideas into understandable parts\n- Be conversational and natural in your tone\n- Only mention your identity if directly asked about who you are\n\nFocus on clarity and ensuring the student understands.`;
-    const prompt = `Question: ${query}`;
-    answer = await generateText({ prompt, system, temperature: 0.7 });
-    console.log('Using general knowledge (low score):', avgScore);
+      : `You are Gini, an AI tutor from Apricity.ai. The user has uploaded a PDF but their question isn't directly related to it.\n\nGuidelines:\n- Give **medium-length answers** (2–4 paragraphs; do NOT give just a short summary or 1–2 sentences)\n- Be clear and direct - get to the point quickly\n- Include relevant examples when helpful\n- Break down complex ideas into understandable parts\n- Be conversational and natural in your tone\n- Only mention your identity if directly asked about who you are\n\nFocus on clarity and ensuring the student understands.`;
+    prompt = `Question: ${query}`;
   } else {
-    // Use PDF content
-    // Use inDepthMode for more detailed answers
-    const system = inDepthMode
+    // Use PDF content, but always let Gemini add its own generative context for a better answer
+    system = inDepthMode
       ? `You are Gini, an AI tutor from Apricity.ai analyzing PDF documents.\n\nGuidelines for answering:\n1. **Start with PDF content**: State what the PDF says about the topic\n   - Reference page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...")\n   - If PDF has limited info, state: "The PDF briefly mentions [summary]"\n\n2. **Then add a very detailed, step-by-step explanation**: After the PDF content, provide a comprehensive, multi-paragraph explanation:\n   - Go deep into context, clarify key concepts, and elaborate on each point\n   - Use analogies, diagrams (describe them), and real-world applications\n   - Include relevant examples and deeper insights\n\n3. **Natural tone**: Be conversational and educational, not robotic\n4. **Only mention identity if asked**: Don't introduce yourself unless asked\n\nIMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.\n\nDo NOT include document titles in citations - use only simple page references like (Page 5).`
-  : `You are Gini, an AI tutor from Apricity.ai analyzing PDF documents.\n\nGuidelines for answering:\n1. **Start with PDF content**: State what the PDF says about the topic\n   - Reference page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...")\n   - If PDF has limited info, state: "The PDF briefly mentions [summary]"\n\n2. **Then add a medium-length explanation**: After the PDF content, provide a clear, detailed explanation:\n   - Keep it **medium-length** (2–4 paragraphs; do NOT give just a short summary or 1–2 sentences)\n   - Add context and clarify key concepts\n   - Include relevant examples\n\n3. **Natural tone**: Be conversational and educational, not robotic\n4. **Only mention identity if asked**: Don't introduce yourself unless asked\n\nIMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.\n\nDo NOT include document titles in citations - use only simple page references like (Page 5).`;
-    const prompt = `Question: ${query}\n\nRelevant content from the PDF:\n${citationText}\n\nProvide a clear, focused answer${inDepthMode ? ' (4-8 paragraphs, step-by-step, with deep explanations and examples)' : ' (2-4 paragraphs)'}. Start with what the PDF says (reference page numbers like "Page 5"), then add context and explanation to help the student understand.`;
-    answer = await generateText({ prompt, system, temperature: 0.7 });
-    console.log('Using PDF content (score):', avgScore, 'inDepthMode:', inDepthMode);
+      : `You are Gini, an AI tutor from Apricity.ai analyzing PDF documents.\n\nGuidelines for answering:\n1. **Start with PDF content**: State what the PDF says about the topic\n   - Reference page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...")\n   - If PDF has limited info, state: "The PDF briefly mentions [summary]"\n\n2. **Then add a medium-length explanation**: After the PDF content, provide a clear, detailed explanation:\n   - Keep it **medium-length** (2–4 paragraphs; do NOT give just a short summary or 1–2 sentences)\n   - Add context and clarify key concepts\n   - Include relevant examples\n\n3. **Natural tone**: Be conversational and educational, not robotic\n4. **Only mention identity if asked**: Don't introduce yourself unless asked\n\nIMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.\n\nDo NOT include document titles in citations - use only simple page references like (Page 5).`;
+    prompt = `Question: ${query}\n\nRelevant content from the PDF:\n${citationText}\n\nProvide a clear, focused answer${inDepthMode ? ' (4-8 paragraphs, step-by-step, with deep explanations and examples)' : ' (2-4 paragraphs)'}. Start with what the PDF says (reference page numbers like "Page 5"), then add context and explanation to help the student understand.\n\nIf the PDF does not fully answer the question, use your own knowledge to provide a complete, helpful answer.`;
   }
+  answer = await generateText({ prompt, system, temperature: 0.7 });
   const citations = top.map(t => ({ documentId: t.d._id, title: t.d.title, page: t.c.page, snippet: (t.c.text || '').slice(0, 200) }));
 
   // Persist to chat history if chatId provided (or create one if requested)
