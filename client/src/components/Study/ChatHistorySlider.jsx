@@ -331,7 +331,15 @@ export default function ChatHistorySlider({
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 8 }}>
                   <div style={{ fontWeight: 600, flex: 1 }}>
-                    {chat.title || "Untitled Chat"}
+                    <span style={{
+                      display: "block",
+                      maxWidth: "220px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap"
+                    }}>
+                      {chat.title || "Untitled Chat"}
+                    </span>
                   </div>
                   <div style={{ display: "flex", gap: "4px" }} onClick={(e) => e.stopPropagation()}>
                     {/* Rename button */}

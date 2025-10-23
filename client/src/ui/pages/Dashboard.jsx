@@ -11,16 +11,18 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/progress')
-      if (!response.ok) throw new Error('Failed to load progress data')
-      const result = await response.json()
-      setData(result)
-      setLastRefresh(new Date())
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await fetch('/api/progress', { headers });
+      if (!response.ok) throw new Error('Failed to load progress data');
+      const result = await response.json();
+      setData(result);
+      setLastRefresh(new Date());
     } catch (err) {
-      console.error('Dashboard error:', err)
-      setError(err.message)
+      console.error('Dashboard error:', err);
+      setError(err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 

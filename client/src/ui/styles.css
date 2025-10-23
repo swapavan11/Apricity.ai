@@ -176,8 +176,6 @@ input[type="radio"]:disabled {
 
 .dashboard-main {
   -ms-overflow-style: none;
-  -webkit-scrollbar-width: none;
-  scrollbar-width: none;
 }
 .section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }

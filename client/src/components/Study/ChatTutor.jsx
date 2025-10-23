@@ -26,6 +26,60 @@ export default function ChatTutor({
   setLoadingAsk,
   setYt,
 }) {
+  // --- Speech Recognition (Mic) ---
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setQuestion(q => {
+        const newQ = (q ? q + ' ' : '') + transcript;
+        // Also update the textarea value directly for immediate feedback
+        if (inputRef.current) {
+          inputRef.current.value = newQ;
+          inputRef.current.style.height = 'auto';
+          const newHeight = Math.max(78, Math.min(inputRef.current.scrollHeight, 200));
+          inputRef.current.style.height = newHeight + 'px';
+        }
+        return newQ;
+      });
+      setIsListening(false);
+    };
+    recognition.onerror = (event) => {
+      setIsListening(false);
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    recognitionRef.current = recognition;
+    return () => {
+      recognition.stop();
+    };
+  }, []);
+
+  const handleMicClick = () => {
+    if (isListening) {
+      recognitionRef.current && recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      if (recognitionRef.current) {
+        setIsListening(true);
+        recognitionRef.current.start();
+      } else {
+        alert('Speech recognition is not supported in this browser.');
+      }
+    }
+  };
   const [errorMsg, setErrorMsg] = useState("");
   const chatContainerRef = useRef(null);
   const [typingText, setTypingText] = useState("");
@@ -89,36 +143,49 @@ export default function ChatTutor({
     console.log('loadingAsk state changed:', loadingAsk);
   }, [loadingAsk]);
 
-  // Handle image upload
-  const handleImageUpload = async (file) => {
-    if (!file) return;
-    
-    setUploadingImage(true);
-    
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-      
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/upload/image', {
-        method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to upload image');
+  // Helper to handle image files from paste/drop events
+  const handlePasteOrDropImages = (items) => {
+    const imageFiles = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const file = item.getAsFile ? item.getAsFile() : item;
+        if (file && file.type.startsWith('image/')) {
+          imageFiles.push(file);
+        }
       }
-      
-      const data = await response.json();
-      
-      // Add uploaded image URL to state
-      setUploadedImages(prev => [...prev, data.url]);
+    }
+    if (imageFiles.length > 0) {
+      handleImageUpload(imageFiles);
+    }
+  };
+
+  // Handle image upload
+  const handleImageUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploadingImage(true);
+    try {
+      const token = localStorage.getItem('token');
+      const uploadedUrls = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('image', file);
+        const response = await fetch('/api/upload/image', {
+          method: 'POST',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: formData
+        });
+        if (!response.ok) {
+          throw new Error('Failed to upload image');
+        }
+        const data = await response.json();
+        uploadedUrls.push(data.url);
+        console.log('Image uploaded:', data.url);
+      }
+      setUploadedImages(prev => [...prev, ...uploadedUrls]);
       setUploadingImage(false);
-      
-      console.log('Image uploaded:', data.url);
     } catch (error) {
       console.error('Image upload error:', error);
       setErrorMsg('Failed to upload image');
@@ -774,16 +841,19 @@ export default function ChatTutor({
       setTypingText("");
       abortControllerRef.current = null;
       
-      // Remove placeholder/empty messages
-      if (activeChat?.messages?.length > 0) {
-        const lastMsg = activeChat.messages[activeChat.messages.length - 1];
-        if (lastMsg.isPlaceholder || lastMsg.text === "" || (lastMsg.role === 'tutor' && !lastMsg.text)) {
-          setActiveChat({
-            ...activeChat,
-            messages: activeChat.messages.slice(0, -1)
-          });
+      // Remove placeholder/empty messages from the latest chat state
+      setActiveChat(prevChat => {
+        if (prevChat?.messages?.length > 0) {
+          const lastMsg = prevChat.messages[prevChat.messages.length - 1];
+          if (lastMsg.isPlaceholder || lastMsg.text === "" || (lastMsg.role === 'tutor' && !lastMsg.text)) {
+            return {
+              ...prevChat,
+              messages: prevChat.messages.slice(0, -1)
+            };
+          }
         }
-      }
+        return prevChat;
+      });
     }
   };
 
@@ -795,12 +865,12 @@ export default function ChatTutor({
           background: "rgba(234, 179, 8, 0.15)",
           border: "1px solid rgba(234, 179, 8, 0.4)",
           borderRadius: "8px",
-          padding: "10px 14px",
-          marginBottom: "12px",
+          padding: "2px",
+          // marginBottom: "8px",
           display: "flex",
           alignItems: "center",
           gap: "8px",
-          fontSize: "13px",
+          fontSize: "12px",
           color: "#eab308",
         }}>
           <span style={{ fontSize: "16px" }}>💡</span>
@@ -810,6 +880,7 @@ export default function ChatTutor({
           </span>
         </div>
       )}
+      
       
       {/* Chat display area with scroll-to-bottom control */}
       <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
@@ -821,7 +892,7 @@ export default function ChatTutor({
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: 10,
-            padding: "16px",
+            padding: "14px",
             marginBottom: "12px",
             display: "flex",
             flexDirection: "column",
@@ -874,6 +945,9 @@ export default function ChatTutor({
                     : "none",
                   color: m.role === "user" ? "#ffffff" : "var(--text)",
                   border: "none",
+                  wordBreak: "break-word",
+                  whiteSpace: "pre-line",
+                  overflowWrap: "break-word",
                 }}
               >
                 {/* Only show label for Gini (tutor/assistant), not for user */}
@@ -1044,6 +1118,20 @@ export default function ChatTutor({
                     // Edit mode for user messages
                     <div>
                       <textarea
+              onPaste={e => {
+                if (e.clipboardData && e.clipboardData.items) {
+                  handlePasteOrDropImages(e.clipboardData.items);
+                }
+              }}
+              onDrop={e => {
+                e.preventDefault();
+                if (e.dataTransfer && e.dataTransfer.items) {
+                  handlePasteOrDropImages(e.dataTransfer.items);
+                }
+              }}
+              onDragOver={e => {
+                e.preventDefault();
+              }}
                         value={editedText}
                         onChange={(e) => setEditedText(e.target.value)}
                         style={{
@@ -1415,6 +1503,7 @@ export default function ChatTutor({
                               .replace(/[-*+]\s+/g, '') // Remove list markers
                               .replace(/\d+\.\s+/g, '') // Remove numbered list markers
                               .replace(/\n+/g, '. ') // Replace newlines with pauses
+                              .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '') // Remove emojis
                               .trim();
                             
                             if (!cleanText) {
@@ -1567,19 +1656,76 @@ export default function ChatTutor({
         )}
       </div>
 
+      
+
       {/* Input area */}
       <div
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
           borderRadius: 12,
-          padding: "16px",
+          padding: "8px 14px",
           flexShrink: 0,
           boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.08), 0 -2px 4px rgba(0, 0, 0, 0.04)",
         }}
       >
         {/* Input row - Image/toggle column and textarea */}
+        {/* Uploaded Images Preview (above input area) */}
+      {uploadedImages.length > 0 && (
+        <div style={{
+          display: "flex",
+          flexDirection: "row",
+          gap: "12px",
+          marginBottom: 4,
+          marginTop: 4,
+          alignItems: "center",
+          width: "100%"
+        }}>
+          {uploadedImages.map((url, idx) => (
+            <div key={idx} style={{ position: "relative" }}>
+              <img
+                src={url}
+                alt={`Upload ${idx + 1}`}
+                style={{
+                  width: "60px",
+                  height: "60px",
+                  objectFit: "cover",
+                  borderRadius: "6px",
+                  border: "2px solid var(--accent)",
+                  boxShadow: "0 2px 8px rgba(124, 156, 255, 0.3)",
+                  background: "#fff"
+                }}
+              />
+              <button
+                onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== idx))}
+                style={{
+                  position: "absolute",
+                  top: "-6px",
+                  right: "-6px",
+                  width: "20px",
+                  height: "20px",
+                  borderRadius: "50%",
+                  background: "#ef4444",
+                  border: "2px solid #fff",
+                  color: "#fff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                }}
+                title="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
         <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+          
           {/* Left side - Image upload button, toggle, and preview */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {/* Image Upload Button */}
@@ -1591,14 +1737,14 @@ export default function ChatTutor({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "6px",
-                padding: "10px 12px",
+                // padding: "10px 12px",
                 borderRadius: "10px",
                 border: "2px solid var(--border)",
                 background: uploadedImages.length > 0 ? "rgba(124, 156, 255, 0.12)" : "var(--surface)",
                 cursor: uploadingImage ? "not-allowed" : "pointer",
                 transition: "all 0.2s ease",
                 opacity: uploadingImage ? 0.6 : 1,
-                minHeight: "44px",
+                minHeight: "24px",
                 whiteSpace: "nowrap",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
               }}
@@ -1616,13 +1762,13 @@ export default function ChatTutor({
               }}
               title="Add Image"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
                 <polyline points="21 15 16 10 5 21"></polyline>
               </svg>
               <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text)" }}>
-                {uploadingImage ? "Uploading..." : uploadedImages.length > 0 ? `${uploadedImages.length}` : "Image"}
+                {uploadingImage ? "Uploading..." : uploadedImages.length > 0 ? `${uploadedImages.length}` : "Add"}
               </span>
             </button>
             <input
@@ -1631,9 +1777,9 @@ export default function ChatTutor({
               accept="image/*"
               style={{ display: "none" }}
               onChange={(e) => {
-                const file = e.target.files[0];
-                if (file) {
-                  handleImageUpload(file);
+                const files = Array.from(e.target.files);
+                if (files.length > 0) {
+                  handleImageUpload(files);
                   e.target.value = ''; // Reset input
                 }
               }}
@@ -1645,7 +1791,7 @@ export default function ChatTutor({
                 onClick={() => setInDepthMode(!inDepthMode)}
                 style={{
                   width: "52px",
-                  height: "28px",
+                  height: "24px",
                   borderRadius: "14px",
                   background: inDepthMode 
                     ? getBubbleTheme()
@@ -1662,8 +1808,8 @@ export default function ChatTutor({
               >
                 <div
                   style={{
-                    width: "22px",
-                    height: "22px",
+                    width: "18px",
+                    height: "18px",
                     borderRadius: "50%",
                     background: "#fff",
                     position: "absolute",
@@ -1684,166 +1830,180 @@ export default function ChatTutor({
               </span>
             </div>
             
-            {/* Uploaded Images Preview */}
-            {uploadedImages.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {uploadedImages.map((url, idx) => (
-                  <div key={idx} style={{ position: "relative" }}>
-                    <img 
-                      src={url} 
-                      alt={`Upload ${idx + 1}`}
-                      style={{ 
-                        width: "60px", 
-                        height: "60px", 
-                        objectFit: "cover", 
-                        borderRadius: "6px",
-                        border: "2px solid var(--accent)",
-                        boxShadow: "0 2px 8px rgba(124, 156, 255, 0.3)",
-                      }} 
-                    />
-                    <button
-                      onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== idx))}
-                      style={{
-                        position: "absolute",
-                        top: "-6px",
-                        right: "-6px",
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "50%",
-                        background: "#ef4444",
-                        border: "2px solid #fff",
-                        color: "#fff",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-                      }}
-                      title="Remove image"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* ...existing code... */}
           </div>
-          <textarea
-            ref={inputRef => {
-              if (inputRef) {
-                inputRef.style.height = 'auto';
-                const newHeight = Math.max(78, Math.min(inputRef.scrollHeight, 200));
-                inputRef.style.height = newHeight + 'px';
-              }
-            }}
-            rows={1}
-            style={{
-              flex: 1,
-              background: "var(--input-bg)",
-              color: "var(--text)",
-              border: "2px solid var(--border)",
-              borderRadius: 10,
-              padding: "14px 16px",
-              resize: "none",
-              fontFamily: "inherit",
-              fontSize: "15px",
-              minHeight: 78,
-              maxHeight: 200,
-              overflowY: 'auto',
-              transition: 'all 0.2s ease',
-              outline: "none",
-              boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.1)",
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = "var(--accent)";
-              e.target.style.boxShadow = "inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(102, 126, 234, 0.1)";
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = "var(--border)";
-              e.target.style.boxShadow = "inset 0 1px 3px rgba(0, 0, 0, 0.1)";
-            }}
-            value={question}
-            onChange={e => {
-              setQuestion(e.target.value);
-              if (e.target) {
-                e.target.style.height = 'auto';
-                const newHeight = Math.max(78, Math.min(e.target.scrollHeight, 200));
-                e.target.style.height = newHeight + 'px';
-              }
-            }}
-            placeholder={loadingAsk ? "Generating response... (you can type your next question)" : "Ask your tutor anything... (Enter to send • Shift+Enter for new line)"}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !e.shiftKey && !loadingAsk) {
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            background: 'var(--surface)',
+            borderRadius: 12,
+            // border: '2px solid var(--border)',
+            // padding: '10px 14px',
+            minHeight: 64,
+            boxSizing: 'border-box',
+            width: '100%',
+            flex: 1,
+          }}>
+            <textarea
+              ref={inputRef}
+              rows={1}
+              style={{
+                flex: 1,
+                width: '100%',
+                background: "var(--input-bg)",
+                color: "var(--text)",
+                border: "3px solid var(--accent)",
+                borderRadius: 10,
+                padding: "14px 16px",
+                resize: "none",
+                fontFamily: "inherit",
+                fontSize: "15px",
+                minHeight: 90,
+                maxHeight: 120,
+                overflowY: 'auto',
+                transition: 'all 0.2s ease',
+                outline: "none",
+                boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.1)",
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = "var(--accent)";
+                e.target.style.boxShadow = "inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(102, 126, 234, 0.1)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "var(--border)";
+                e.target.style.boxShadow = "inset 0 1px 3px rgba(0, 0, 0, 0.1)";
+              }}
+              value={question}
+              onChange={e => {
+                setQuestion(e.target.value);
+                if (e.target) {
+                  e.target.style.height = 'auto';
+                  const newHeight = Math.max(78, Math.min(e.target.scrollHeight, 200));
+                  e.target.style.height = newHeight + 'px';
+                }
+              }}
+              placeholder={loadingAsk
+                ? "Generating response...\n(you can type your next question)"
+                : `Ask your tutor anything...\n(Enter to send • Shift+Enter for new line • Paste/drag images to upload)`}
+              onPaste={e => {
+                if (e.clipboardData && e.clipboardData.items) {
+                  handlePasteOrDropImages(e.clipboardData.items);
+                }
+              }}
+              onDrop={e => {
                 e.preventDefault();
-                onAsk();
-              }
-            }}
-          />
-          <button
-            onClick={loadingAsk ? onStopGeneration : onAsk}
-            disabled={!loadingAsk && !question.trim()}
-            style={{
-              minHeight: 78,
-              width: 60,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "4px",
-              borderRadius: "10px",
-              background: loadingAsk 
-                ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
-                : question.trim() 
-                  ? getBubbleTheme()
-                  : "var(--surface)",
-              border: "2px solid " + (loadingAsk ? "#ef4444" : question.trim() ? "transparent" : "var(--border)"),
-              color: loadingAsk || question.trim() ? "#fff" : "var(--muted)",
-              padding: "8px",
-              cursor: (!loadingAsk && !question.trim()) ? "not-allowed" : "pointer",
-              transition: "all 0.2s ease",
-              boxShadow: (loadingAsk || question.trim()) 
-                ? "0 4px 12px rgba(102, 126, 234, 0.3)"
-                : "0 1px 3px rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            {loadingAsk ? (
-              <>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <rect x="6" y="4" width="4" height="16"></rect>
-                  <rect x="14" y="4" width="4" height="16"></rect>
-                </svg>
-                <span style={{ fontSize: "11px", fontWeight: 600 }}>Stop</span>
-              </>
-            ) : (
-              <>
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"
+                if (e.dataTransfer && e.dataTransfer.items) {
+                  handlePasteOrDropImages(e.dataTransfer.items);
+                }
+              }}
+              onDragOver={e => {
+                e.preventDefault();
+              }}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey && !loadingAsk) {
+                  e.preventDefault();
+                  onAsk();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleMicClick}
+              style={{
+                minHeight: 51.87,
+                width: 60,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                borderRadius: "10px",
+                background: isListening ? 'rgba(34,197,94,0.12)' : 'var(--border)',
+                border: isListening ? '2px solid #22c55e' : '2px solid var(--border)',
+                color: isListening ? '#22c55e' : 'var(--muted)',
+                padding: "8px",
+                margin: 0,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                outline: isListening ? '2px solid #22c55e' : 'none',
+                boxShadow: isListening ? '0 0 0 2px #22c55e33' : 'none',
+              }}
+              title={isListening ? 'Listening...' : 'Type with your voice'}
+              aria-label="Type with your voice"
+            >
+              {isListening ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#22c55e"><circle cx="12" cy="12" r="10" opacity="0.2"/><rect x="9" y="4" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="#22c55e" strokeWidth="2" fill="none"/></svg>
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="4" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+              )}
+            </button>
+            <button
+              onClick={loadingAsk ? onStopGeneration : onAsk}
+              disabled={!loadingAsk && !question.trim()}
+              style={{
+                minHeight: 44,
+                width: 60,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                borderRadius: "10px",
+                background: loadingAsk 
+                  ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
+                  : question.trim() 
+                    ? getBubbleTheme()
+                    : "var(--surface)",
+                border: "2px solid " + (loadingAsk ? "#ef4444" : question.trim() ? "transparent" : "var(--border)"),
+                color: loadingAsk || question.trim() ? "#fff" : "var(--muted)",
+                padding: "8px",
+                cursor: (!loadingAsk && !question.trim()) ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease",
+                boxShadow: (loadingAsk || question.trim()) 
+                  ? "0 4px 12px rgba(102, 126, 234, 0.3)"
+                  : "0 1px 3px rgba(0, 0, 0, 0.08)",
+                margin: 0,
+              }}
+            >
+              {loadingAsk ? (
+                <>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
                     stroke="currentColor"
                     strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span style={{ fontSize: "11px", fontWeight: 600 }}>Send</span>
-              </>
-            )}
-          </button>
+                  >
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                  </svg>
+                  <span style={{ fontSize: "11px", fontWeight: 600 }}>Stop</span>
+                </>
+              ) : (
+                <>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span style={{ fontSize: "11px", fontWeight: 600 }}>Send</span>
+                </>
+              )}
+            </button>
+
+          </div>
         </div>
       </div>
 

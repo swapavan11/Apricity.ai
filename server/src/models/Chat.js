@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const MessageSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'assistant'], required: true },
   text: { type: String, required: true },
+  images: [{ type: String }],
   citations: [{
     documentId: mongoose.Schema.Types.ObjectId,
     title: String,
