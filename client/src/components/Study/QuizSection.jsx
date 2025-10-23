@@ -90,6 +90,18 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory })
         selectedTopic
       );
 
+      // If no questions generated, show error and log raw output
+      if (!res.questions || !Array.isArray(res.questions) || res.questions.length === 0) {
+        setValidationError("Quiz generation failed. Please try again, reduce question counts, or adjust your instructions.");
+        if (res.raw) {
+          // eslint-disable-next-line no-console
+          console.error("Quiz generation LLM output:", res.raw);
+        }
+        setQuiz(null);
+        setLoadingQuiz(false);
+        return;
+      }
+
       setQuiz(res);
       setAnswers({});
       setScore(null);
@@ -114,7 +126,14 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory })
       };
       const res = await api.scoreQuiz(payload);
       setScore(res);
-      if (selected && selected !== "all") await loadAttemptHistory();
+      // Always refresh attempt history after scoring
+      if (typeof loadAttemptHistory === 'function' && selected && selected !== "all") {
+        await loadAttemptHistory();
+      }
+      // Also trigger dashboard refresh if available
+      if (window.dispatchEvent) {
+        window.dispatchEvent(new Event('refreshDashboard'));
+      }
     } finally {
       setLoadingScore(false);
     }
