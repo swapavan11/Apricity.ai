@@ -105,6 +105,8 @@ export default function ChatTutor({
   const [inDepthMode, setInDepthMode] = useState(false); // Toggle for in-depth responses
   const [uploadedImages, setUploadedImages] = useState([]); // Store uploaded image URLs
   const [uploadingImage, setUploadingImage] = useState(false); // Track image upload status
+  // Modal image preview state
+  const [modalImageUrl, setModalImageUrl] = useState(null);
   
   // Get current chat's versions
   const messageVersions = allChatVersions[activeChatId] || {};
@@ -611,15 +613,25 @@ export default function ChatTutor({
     setTypingText("");
     setErrorMsg(""); // Clear any error messages
     
-    // Remove the placeholder "thinking" message if it exists
+    // Remove the placeholder or any incomplete/just-added assistant/tutor message
     if (activeChat?.messages?.length > 0) {
-      const lastMsg = activeChat.messages[activeChat.messages.length - 1];
-      if (lastMsg.isPlaceholder || (lastMsg.role === 'tutor' && !lastMsg.text) || lastMsg.text === "") {
-        setActiveChat({
-          ...activeChat,
-          messages: activeChat.messages.slice(0, -1)
-        });
+      let msgs = [...activeChat.messages];
+      // Remove all trailing tutor/assistant messages that are placeholders, empty, or just added
+      while (msgs.length > 0) {
+        const lastMsg = msgs[msgs.length - 1];
+        if (
+          lastMsg.isPlaceholder ||
+          ((lastMsg.role === 'tutor' || lastMsg.role === 'assistant') && (!lastMsg.text || lastMsg.text.trim() === "" || lastMsg.text === lastMsg._fullText))
+        ) {
+          msgs.pop();
+        } else {
+          break;
+        }
       }
+      setActiveChat({
+        ...activeChat,
+        messages: msgs
+      });
     }
   };
 
@@ -669,40 +681,36 @@ export default function ChatTutor({
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
-      // Optimistically add user message to active chat display (with images if any)
+
+      // Optimistically add user message and always add a placeholder tutor message (for animation)
+      const optimisticMessages = [
+        ...(chatToUpdate?.messages || []),
+        {
+          role: "user",
+          text: userQuestion,
+          images: uploadedImages.length > 0 ? [...uploadedImages] : undefined,
+          createdAt: new Date().toISOString(),
+          citations: []
+        },
+        {
+          role: "tutor",
+          text: "",
+          createdAt: new Date().toISOString(),
+          citations: [],
+          isPlaceholder: true
+        }
+      ];
       const optimisticChat = {
         ...chatToUpdate,
-        messages: [
-          ...(chatToUpdate?.messages || []),
-          { 
-            role: "user", 
-            text: userQuestion, 
-            images: uploadedImages.length > 0 ? [...uploadedImages] : undefined,
-            createdAt: new Date().toISOString(), 
-            citations: [] 
-          }
-        ]
+        messages: optimisticMessages
       };
-      
       // Clear uploaded images after adding to message
       const messagesToSend = uploadedImages.length > 0 ? [...uploadedImages] : [];
       setUploadedImages([]);
-      
       // Store the index of this user message for anchoring
-      const userMessageIndex = optimisticChat.messages.length - 1;
+      const userMessageIndex = optimisticMessages.length - 2;
       lastUserMessageIndexRef.current = userMessageIndex;
-      
       setActiveChat(optimisticChat);
-
-      // Add placeholder tutor message immediately to reduce perceived delay
-      const chatWithPlaceholder = {
-        ...optimisticChat,
-        messages: [
-          ...optimisticChat.messages,
-          { role: "tutor", text: "", createdAt: new Date().toISOString(), citations: [], isPlaceholder: true }
-        ]
-      };
-      setActiveChat(chatWithPlaceholder);
 
       // After DOM commits, anchor scroll so the new user message appears near top-right (ChatGPT style)
       setTimeout(() => {
@@ -779,7 +787,8 @@ export default function ChatTutor({
             _fullText: res.answer
           });
         }
-        setActiveChat({ ...optimisticChat, messages: newMessages });
+        // Force state update to ensure re-render (works for both general and PDF-selected modes)
+        setActiveChat(prev => ({ ...optimisticChat, messages: [...newMessages] }));
         // Start typing animation with no delay
         requestAnimationFrame(() => {
           typeText(res.answer);
@@ -958,7 +967,7 @@ export default function ChatTutor({
           const showTyping = isLastMessage && (m.role === "tutor" || m.role === "assistant") && isTyping;
           const displayText = showTyping ? typingText : m.text;
           const isPlaceholder = m.isPlaceholder && !displayText;
-          
+          // Always show the first assistant/tutor response, do not filter it out
           return (
             <div
               key={idx}
@@ -988,7 +997,6 @@ export default function ChatTutor({
                   color: m.role === "user" ? "#ffffff" : "var(--text)",
                   border: "none",
                   wordBreak: "break-word",
-                  whiteSpace: "pre-line",
                   overflowWrap: "break-word",
                 }}
               >
@@ -1074,7 +1082,11 @@ export default function ChatTutor({
                                           e.target.style.borderColor = "rgba(124, 156, 255, 0.2)";
                                           e.target.style.color = "var(--text)";
                                         }}
-                                        onClick={() => console.log("Page clicked:", pageNum)}
+                                        onClick={() => {
+                                          if (typeof props.onPdfPageClick === 'function') {
+                                            props.onPdfPageClick(pageNum);
+                                          }
+                                        }}
                                         title={`Jump to Page ${pageNum}`}
                                       >
                                         {pageNum}
@@ -1086,9 +1098,9 @@ export default function ChatTutor({
                               }
                               return children;
                             };
-                            
+                            // Reduce margin between paragraphs
                             return (
-                              <p style={{ margin: "0.5em 0", lineHeight: "1.6" }} {...props}>
+                              <p style={{ margin: "0.6em 0", lineHeight: "1.5" }} {...props}>
                                 {React.Children.map(children, child => 
                                   typeof child === 'string' ? processChildren(child) : child
                                 )}
@@ -1251,12 +1263,77 @@ export default function ChatTutor({
                                 border: "2px solid rgba(255, 255, 255, 0.3)",
                                 cursor: "pointer",
                               }}
-                              onClick={() => window.open(imgUrl, '_blank')}
+                              onClick={() => setModalImageUrl(imgUrl)}
                               title="Click to view full size"
                             />
                           ))}
                         </div>
                       )}
+      {/* Modal for image preview */}
+      {modalImageUrl && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+          onClick={() => setModalImageUrl(null)}
+        >
+          <div
+            style={{
+              position: "relative",
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <img
+              src={modalImageUrl}
+              alt="Preview"
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "90vh",
+                borderRadius: "10px",
+                boxShadow: "0 2px 16px rgba(0,0,0,0.5)",
+                background: "#222"
+              }}
+            />
+            <button
+              onClick={() => setModalImageUrl(null)}
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                background: "rgba(0,0,0,0.6)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "50%",
+                width: 32,
+                height: 32,
+                fontSize: 20,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 10000,
+              }}
+              aria-label="Close preview"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
                       <span style={{ 
                         whiteSpace: "pre-wrap",
                         fontWeight: 500,
@@ -1989,7 +2066,7 @@ export default function ChatTutor({
             </button>
             <button
               onClick={loadingAsk ? onStopGeneration : onAsk}
-              disabled={loadingAsk || !question.trim()}
+              disabled={!loadingAsk && !question.trim()}
               style={{
                 minHeight: 44,
                 width: 60,

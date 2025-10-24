@@ -29,6 +29,12 @@ export default function Study({ selected, docs }) {
   const [answer, setAnswer] = useState("");
   const [citations, setCitations] = useState([]);
 
+  // PDF page navigation state
+  const [pdfPage, setPdfPage] = useState(null);
+  const handlePdfPageClick = (pageNum) => {
+    setPdfPage(Number(pageNum));
+  };
+
   // YouTube
   const [yt, setYt] = useState(null);
   const [loadingYt, setLoadingYt] = useState(false);
@@ -156,6 +162,7 @@ export default function Study({ selected, docs }) {
     loadingAsk,
     setLoadingAsk,
     setYt,
+    onPdfPageClick: handlePdfPageClick,
   };
 
   return (
@@ -175,7 +182,7 @@ export default function Study({ selected, docs }) {
         }}
       >
   {/* pass the selected document object so viewer can resolve cloudinary/local/protected URLs */}
-  <PdfViewer api={api} doc={docs.find(d => d._id === selected)} />
+  <PdfViewer api={api} doc={docs.find(d => d._id === selected)} page={pdfPage} />
       </div>
 
       {/* Resize handle */}

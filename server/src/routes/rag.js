@@ -160,7 +160,7 @@ router.post('/ask', authenticateToken, async (req, res) => {
     if (chatId) {
       const existingChat = await Chat.findById(chatId);
       if (existingChat && existingChat.messages && existingChat.messages.length > 0) {
-        const recentMessages = existingChat.messages.slice(-6); // Last 6 messages (3 exchanges)
+        const recentMessages = existingChat.messages.slice(-16); // Last 16 messages (8 exchanges)
         contextPrompt = '\n\nPrevious conversation:\n' + recentMessages.map(m => 
           `${m.role === 'user' ? 'Student' : 'You'}: ${m.text.slice(0, 200)}`
         ).join('\n') + '\n\n';
@@ -208,42 +208,112 @@ router.post('/ask', authenticateToken, async (req, res) => {
     }
     docs = [d];
   }
-  
   if (!docs.length) {
     return res.json({ answer: "No documents found. Please upload a PDF first.", citations: [], usedGeneral: true });
   }
-  
-  const contexts = [];
-  let queryVec = null
+  // --- Improved PDF context retrieval ---
+  // 1. Query expansion: add synonyms and related terms
+  function expandQuery(q) {
+    // Simple expansion: add synonyms for common question words
+    let expanded = [q];
+    if (/define|meaning|what is/i.test(q)) expanded.push(q.replace(/define|meaning|what is/gi, 'explain'));
+    if (/how/i.test(q)) expanded.push(q.replace(/how/gi, 'method'));
+    if (/why/i.test(q)) expanded.push(q.replace(/why/gi, 'reason'));
+    // Add more expansions as needed
+    return Array.from(new Set(expanded));
+  }
+  const expandedQueries = expandQuery(query);
+  // 2. Embed all expanded queries and average
+  let queryVec = null;
+  let embeddingError = null;
   try {
-    const [v] = await embedTexts([query])
-    if (Array.isArray(v)) queryVec = v
-  } catch (e) {}
-  
+    const vecs = await embedTexts(expandedQueries);
+    if (Array.isArray(vecs) && vecs.length) {
+      queryVec = vecs[0];
+      if (vecs.length > 1) {
+        // Average all vectors
+        for (let i = 1; i < vecs.length; i++) {
+          for (let j = 0; j < queryVec.length; j++) {
+            queryVec[j] += vecs[i][j];
+          }
+        }
+        for (let j = 0; j < queryVec.length; j++) {
+          queryVec[j] /= vecs.length;
+        }
+      }
+    }
+  } catch (e) {
+    embeddingError = e;
+    console.error('Embedding request failed:', e);
+  }
+  // 3. Score chunks with weighted sum of embedding and lexical scores
+  const contexts = [];
   for (const d of docs) {
     if (!d.chunks || !d.chunks.length) {
       console.log(`Document ${d.title} has no chunks`);
       continue;
     }
-    for (const c of d.chunks.slice(0, 500)) {
+    for (let idx = 0; idx < Math.min(d.chunks.length, 500); idx++) {
+      const c = d.chunks[idx];
       if (!c.text || c.text.trim().length < 10) continue;
-      let score = 0
-      if (queryVec && Array.isArray(c.embedding)) {
-        score = cosineSimilarityVec(queryVec, c.embedding)
-      } else {
-        score = lexicalScore(query, c.text)
-      }
-      contexts.push({ d, c, score });
+      let embScore = queryVec && Array.isArray(c.embedding) ? cosineSimilarityVec(queryVec, c.embedding) : 0;
+      let lexScore = lexicalScore(query, c.text);
+      // Weighted sum: favor embedding but include lexical
+      let score = 0.7 * embScore + 0.3 * lexScore;
+      contexts.push({ d, c, score, idx });
     }
   }
   if (!contexts.length) {
     return res.json({ answer: "No relevant content found in the uploaded documents. Please try a different question or upload more documents.", citations: [], usedGeneral: true });
   }
-  
+  // 4. Select top 12 chunks, merge adjacent chunks for context
   contexts.sort((a, b) => b.score - a.score);
-  const top = contexts.slice(0, 5);
-  const avgScore = top.length ? (top.reduce((s, x) => s + x.score, 0) / top.length) : 0;
-  const citationText = top.map(t => `Doc: ${t.d.title} p.${t.c.page}: "${(t.c.text || '').slice(0, 300).replace(/\s+/g, ' ')}"`).join('\n');
+  let top = contexts.slice(0, 12);
+  // Merge adjacent chunks (same doc, consecutive idx)
+  const merged = [];
+  for (let i = 0; i < top.length; i++) {
+    const curr = top[i];
+    // If previous chunk is same doc and adjacent idx, merge
+    if (
+      merged.length > 0 &&
+      merged[merged.length - 1].d._id.toString() === curr.d._id.toString() &&
+      merged[merged.length - 1].idx + 1 === curr.idx
+    ) {
+      merged[merged.length - 1].c.text += ' ' + curr.c.text;
+      merged[merged.length - 1].score = Math.max(merged[merged.length - 1].score, curr.score);
+    } else {
+      merged.push({ ...curr });
+    }
+  }
+  // 5. For large PDFs, send only top matched and related chunks (merged for context)
+  let citationText = '';
+  const MAX_CHUNKS = 20;
+  if (merged.length > MAX_CHUNKS) {
+    // Only send top MAX_CHUNKS merged chunks
+    const seenPages = new Set();
+    citationText = merged
+      .slice(0, MAX_CHUNKS)
+      .filter(m => {
+        if (seenPages.has(`${m.d._id}_${m.c.page}`)) return false;
+        seenPages.add(`${m.d._id}_${m.c.page}`);
+        return true;
+      })
+      .map(m => `Doc: ${m.d.title} p.${m.c.page}: "${(m.c.text || '').slice(0, 400).replace(/\s+/g, ' ')}"`)
+      .join('\n');
+  } else {
+    // For small PDFs, send all merged chunks
+    const seenPages = new Set();
+    citationText = merged
+      .filter(m => {
+        if (seenPages.has(`${m.d._id}_${m.c.page}`)) return false;
+        seenPages.add(`${m.d._id}_${m.c.page}`);
+        return true;
+      })
+      .map(m => `Doc: ${m.d.title} p.${m.c.page}: "${(m.c.text || '').slice(0, 400).replace(/\s+/g, ' ')}"`)
+      .join('\n');
+  }
+  const avgScore = merged.length ? (merged.reduce((s, x) => s + x.score, 0) / merged.length) : 0;
+  // ...existing code...
 
   console.log('RAG Debug:', { 
     query, 
@@ -265,18 +335,32 @@ router.post('/ask', authenticateToken, async (req, res) => {
   if (greetingRegex.test(query.trim())) {
     system = `You are Gini, an AI tutor from Apricity.ai. If the user greets you or makes small talk, respond concisely and warmly (1-2 sentences max). Do not give a long or detailed answer for greetings.`;
     prompt = query;
-  } else if (contexts.length === 0 || avgScore < 0.01) {
+  } else if (contexts.length === 0 || avgScore <= 0) {
     // No relevant PDF info or very weak match: use general knowledge
     system = inDepthMode
       ? `You are Gini, an AI tutor from Apricity.ai. The user has uploaded a PDF but their question isn't directly related to it.\n\nGuidelines:\n- Give **very detailed, comprehensive answers** (4-8 paragraphs or more if needed)\n- Include step-by-step explanations, relevant examples, and deeper context\n- Break down complex ideas into simple parts, and elaborate on each\n- Use analogies, diagrams (describe them), and real-world applications when possible\n- Be conversational and natural in your tone\n- Only mention your identity if directly asked about who you are\n\nFocus on clarity and ensuring the student understands.`
       : `You are Gini, an AI tutor from Apricity.ai. The user has uploaded a PDF but their question isn't directly related to it.\n\nGuidelines:\n- Give **medium-length answers** (2–4 paragraphs; do NOT give just a short summary or 1–2 sentences)\n- Be clear and direct - get to the point quickly\n- Include relevant examples when helpful\n- Break down complex ideas into understandable parts\n- Be conversational and natural in your tone\n- Only mention your identity if directly asked about who you are\n\nFocus on clarity and ensuring the student understands.`;
     prompt = `Question: ${query}`;
   } else {
-    // Use PDF content, but always let Gemini add its own generative context for a better answer
-    system = inDepthMode
-      ? `You are Gini, an AI tutor from Apricity.ai analyzing PDF documents.\n\nGuidelines for answering:\n1. **Start with PDF content**: State what the PDF says about the topic\n   - Reference page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...")\n   - If PDF has limited info, state: "The PDF briefly mentions [summary]"\n\n2. **Then add a very detailed, step-by-step explanation**: After the PDF content, provide a comprehensive, multi-paragraph explanation:\n   - Go deep into context, clarify key concepts, and elaborate on each point\n   - Use analogies, diagrams (describe them), and real-world applications\n   - Include relevant examples and deeper insights\n\n3. **Natural tone**: Be conversational and educational, not robotic\n4. **Only mention identity if asked**: Don't introduce yourself unless asked\n\nIMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.\n\nDo NOT include document titles in citations - use only simple page references like (Page 5).`
-      : `You are Gini, an AI tutor from Apricity.ai analyzing PDF documents.\n\nGuidelines for answering:\n1. **Start with PDF content**: State what the PDF says about the topic\n   - Reference page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...")\n   - If PDF has limited info, state: "The PDF briefly mentions [summary]"\n\n2. **Then add a medium-length explanation**: After the PDF content, provide a clear, detailed explanation:\n   - Keep it **medium-length** (2–4 paragraphs; do NOT give just a short summary or 1–2 sentences)\n   - Add context and clarify key concepts\n   - Include relevant examples\n\n3. **Natural tone**: Be conversational and educational, not robotic\n4. **Only mention identity if asked**: Don't introduce yourself unless asked\n\nIMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.\n\nDo NOT include document titles in citations - use only simple page references like (Page 5).`;
-    prompt = `Question: ${query}\n\nRelevant content from the PDF:\n${citationText}\n\nProvide a clear, focused answer${inDepthMode ? ' (4-8 paragraphs, step-by-step, with deep explanations and examples)' : ' (2-4 paragraphs)'}. Start with what the PDF says (reference page numbers like "Page 5"), then add context and explanation to help the student understand.\n\nIf the PDF does not fully answer the question, use your own knowledge to provide a complete, helpful answer.`;
+    // Special handling for "what is in the PDF" type questions
+    const whatInPdfRegex = /^(what('| i)?s in (the )?(pdf|document|file)|show (me )?(the )?(pdf|document|file))/i;
+    const summarizeRegex = /^summarize(\s|$)/i;
+    const explainCodeRegex = /^(explain( entire)? code( in (the )?pdf)?|explain all code( in (the )?pdf)?)/i;
+    if (explainCodeRegex.test(query.trim())) {
+      system = `You are Gini, an AI tutor from Apricity.ai. The user wants a detailed explanation of code found in a PDF.\n\nGuidelines:\n- You are receiving code extracted from a PDF document.\n- Break down the code, describe its purpose, logic, and how it works.\n- Reference page numbers naturally (e.g., "Page 5 contains...").\n- Do NOT give a generic explanation about your capabilities.\n- Do NOT ask the user to paste the code.\n- Only mention your identity if asked.\n- Be clear, focused, and informative.`;
+      prompt = `Explain the following code extracted from a PDF document. Break down its logic, purpose, and how it works.\n\nCode from PDF:\n${citationText}`;
+    } else if (whatInPdfRegex.test(query.trim())) {
+      system = `You are Gini, an AI tutor from Apricity.ai. The user wants to know what is inside the PDF.\n\nGuidelines:\n- You are receiving text extracted from a PDF document.\n- Summarize the main topics, sections, and content found in the PDF.\n- List key points, headings, and any important information.\n- Reference page numbers naturally (e.g., "Page 5 covers...", "Page 3 mentions...").\n- Do NOT give a generic explanation about your capabilities.\n- Do NOT ask the user to paste the PDF text.\n- Only mention your identity if asked.\n- Be concise and informative.`;
+      prompt = `Summarize the main topics and content found in this PDF document. List key points, sections, and important information.\n\nPDF content:\n${citationText}`;
+    } else if (summarizeRegex.test(query.trim())) {
+      system = `You are Gini, an AI tutor from Apricity.ai. The user wants a summary of the PDF.\n\nGuidelines:\n- You are receiving text extracted from a PDF document.\n- Read the PDF content below and write a concise summary of the main ideas, topics, and important details.\n- Do NOT explain what summarizing means.\n- Do NOT give a generic answer about summarization.\n- Only mention your identity if asked.\n- Be clear, focused, and informative.`;
+      prompt = `Write a concise summary of the following PDF content. Focus on the main ideas, topics, and important details.\n\nPDF content:\n${citationText}`;
+    } else {
+      system = inDepthMode
+        ? `You are Gini, an AI tutor from Apricity.ai. You are helping students by answering questions using both PDF content and your own knowledge.\n\nGuidelines for answering:\n1. **Start with PDF content**: Clearly state what the PDF says about the topic, referencing page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...").\n2. **Then add a very detailed, step-by-step explanation**: After the PDF content, provide a comprehensive, multi-paragraph explanation using your own knowledge. Go deep into context, clarify key concepts, and elaborate on each point.\n3. **Natural tone**: Be conversational and educational, not robotic.\n4. **Only mention identity if asked**: Don't introduce yourself unless asked.\n\nIMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.\n\nDo NOT include document titles in citations - use only simple page references like (Page 5).`
+        : `You are Gini, an AI tutor from Apricity.ai. You are helping students by answering questions using both PDF content and your own knowledge.\n\nGuidelines for answering:\n1. **Start with PDF content**: Clearly state what the PDF says about the topic, referencing page numbers naturally (e.g., "According to Page 5..." or "Page 3 mentions...").\n2. **Then add a medium-length explanation**: After the PDF content, provide a clear, detailed explanation using your own knowledge. Add context and clarify key concepts.\n3. **Natural tone**: Be conversational and educational, not robotic.\n4. **Only mention identity if asked**: Don't introduce yourself unless asked.\n\nIMPORTANT: If user asks "what's in the PDF" or "only what the document says", focus ONLY on PDF content without elaboration.\n\nDo NOT include document titles in citations - use only simple page references like (Page 5).`;
+      prompt = `Question: ${query}\n\nRelevant content from the PDF:\n${citationText}\n\nThis is what the PDF says about your question above.\n\nDetailed explanation with context (using both the PDF and my own knowledge):\n${inDepthMode ? 'Please provide a step-by-step, multi-paragraph answer with deep explanations and examples.' : 'Please provide a clear, focused answer (2-4 paragraphs) with helpful context.'}`;
+    }
   }
   answer = await generateText({ prompt, system, temperature: 0.7 });
   const citations = top.map(t => ({ documentId: t.d._id, title: t.d.title, page: t.c.page, snippet: (t.c.text || '').slice(0, 200) }));

@@ -1,6 +1,24 @@
+
 import React from "react";
 
-export default function PdfViewer({ api, doc }) {
+export default function PdfViewer({ api, doc, page }) {
+  // Helper to build PDF URL with page navigation if supported
+  const getPdfUrl = () => {
+    if (!doc) return null;
+    const baseUrl = api.resolveDocUrl(doc);
+    // If page is provided, append fragment or query (adjust for your backend)
+    if (page) {
+      // Common pattern: #page=2 for PDF.js, ?page=2 for some backends
+      if (baseUrl.includes("#")) {
+        return `${baseUrl}&page=${page}`;
+      }
+      return `${baseUrl}#page=${page}`;
+    }
+    return baseUrl;
+  };
+
+  const pdfUrl = getPdfUrl();
+
   return (
     <div
       style={{
@@ -13,7 +31,7 @@ export default function PdfViewer({ api, doc }) {
       {doc ? (
         <iframe
           title="pdf"
-          src={api.resolveDocUrl(doc)}
+          src={pdfUrl}
           style={{ width: "100%", height: "100%", border: "none" }}
         />
       ) : (
