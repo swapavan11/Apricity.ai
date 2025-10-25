@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [lastRefresh, setLastRefresh] = useState(null)
   const [selectedAttempt, setSelectedAttempt] = useState(null)
   const [selectedDocumentId, setSelectedDocumentId] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
   
   const loadData = async () => {
     setLoading(true)
@@ -18,6 +19,14 @@ export default function Dashboard() {
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
+      // Invalidate cache first to get fresh data
+      await fetch('/api/progress/invalidate', { 
+        method: 'POST',
+        headers 
+      });
+      
+      // Now fetch fresh data
       const response = await fetch('/api/progress', { headers });
       if (!response.ok) throw new Error('Failed to load progress data');
       const result = await response.json();
@@ -59,44 +68,100 @@ export default function Dashboard() {
     return '#ff7c7c'
   }
 
+  // Filter PDFs based on search query
+  const filteredSummary = data?.summary?.filter(pdf => 
+    pdf.title.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', flexDirection: 'column' }}>
-      {/* TOP RIBBON - PDF Performance with Search */}
-      <div style={{ 
-        padding: '16px 24px',
-        background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.08) 0%, rgba(124, 156, 255, 0.02) 100%)',
-        borderBottom: '2px solid var(--border)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <h2 style={{ 
-          margin: 0, 
-          fontSize: '1.2em', 
-          fontWeight: 700, 
-          color: 'var(--accent)',
+      {/* TOP RIBBON - Progress Dashboard & PDF Performance on same line */}
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)' }}>
+        {/* Left: Progress Dashboard - 25% */}
+        <div style={{
+          width: '25%',
+          padding: '20px 24px',
+          background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.12) 0%, rgba(124, 156, 255, 0.05) 100%)',
+          borderRight: '2px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
-          letterSpacing: '0.5px'
+          justifyContent: 'center'
         }}>
-          📚 Individual PDF Performance
-        </h2>
+          <h1 style={{ 
+            margin: 0, 
+            fontSize: '1.3em', 
+            fontWeight: 900, 
+            color: 'var(--accent)',
+            letterSpacing: '0.5px',
+            textAlign: 'center'
+          }}>
+            📊 PROGRESS DASHBOARD
+          </h1>
+        </div>
         
-        <div style={{display:'flex', gap:12, alignItems:'center'}}>
-          <input 
-            type="text"
-            placeholder="Search PDFs..."
-            style={{
-              padding:'8px 16px',
-              background:'var(--input-bg)',
-              border:'1px solid var(--border)',
-              borderRadius:8,
-              color:'var(--text)',
-              fontSize:'0.9em',
-              width:'250px'
-            }}
-          />
+        {/* Right: PDF Performance + Search + Refresh - 75% */}
+        <div style={{ 
+          width: '75%',
+          padding: '16px 24px',
+          background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.08) 0%, rgba(124, 156, 255, 0.02) 100%)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          {/* PDF Performance Title */}
+          <h2 style={{ 
+            margin: 0, 
+            fontSize: '1.1em', 
+            fontWeight: 700, 
+            color: 'var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            letterSpacing: '0.5px'
+          }}>
+            📚 Individual PDF Performance
+          </h2>
+          
+          {/* Search & Refresh */}
+          <div style={{display:'flex', gap:12, alignItems:'center'}}>
+            <input 
+              type="text"
+              placeholder="Search PDFs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                padding:'8px 16px',
+                background:'var(--input-bg)',
+                border:'1px solid var(--border)',
+                borderRadius:8,
+                color:'var(--text)',
+                fontSize:'0.9em',
+                width:'200px'
+              }}
+            />
+            {lastRefresh && (
+              <button 
+                className="secondary" 
+                onClick={loadData}
+                disabled={loading}
+                title="Refresh all dashboard data"
+                style={{ 
+                  padding: '8px 14px', 
+                  fontSize: '0.85em', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 6
+                }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {loading ? 'Refreshing...' : 'Refresh All'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -110,63 +175,31 @@ export default function Dashboard() {
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
-          {/* Progress Dashboard Header with Refresh */}
+          {/* General Quizzes Header - Match PDF Library Style */}
           <div style={{
-            padding: '16px 16px 12px 16px',
-            background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.12) 0%, rgba(124, 156, 255, 0.05) 100%)',
-            borderBottom: '2px solid var(--border)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(124, 156, 255, 0.08) 100%)',
+            padding: '16px 14px',
+            borderBottom: '2px solid var(--accent)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
           }}>
-            <h1 style={{ 
-              margin: 0, 
-              fontSize: '1.1em', 
-              fontWeight: 900, 
-              color: 'var(--accent)',
-              letterSpacing: '0.5px'
-            }}>
-              📊 PROGRESS DASHBOARD
-            </h1>
-            {lastRefresh && (
-              <button 
-                className="secondary" 
-                onClick={loadData}
-                disabled={loading}
-                title="Refresh all data"
-                style={{ 
-                  padding: '6px 10px', 
-                  fontSize: '0.75em', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 4,
-                  minWidth: 'auto'
-                }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                🔄
-              </button>
-            )}
+            <div style={{fontSize: '1em', fontWeight: 900, color: 'var(--accent)', textAlign: 'center', letterSpacing: '1px'}}>
+              🎯 GENERAL QUIZZES
+            </div>
+            <div style={{fontSize: '0.7em', color: 'var(--muted)', textAlign: 'center', marginTop: 4}}>
+              Non-PDF Mode
+            </div>
           </div>
+          
           {/* Stats Section */}
           {!loading && data?.generalQuizStats && (
             <div style={{ 
               padding: '16px 16px 12px 16px',
-              borderBottom: '1px solid var(--border)'
+              borderBottom: '2px solid var(--border)',
+              background: 'rgba(124, 156, 255, 0.03)'
             }}>
-              <p style={{ 
-                margin: '0 0 12px 0', 
-                fontSize: '0.85em', 
-                color: 'var(--muted)',
-                fontWeight: 600,
-                textAlign: 'center'
-              }}>
-                General Quizzes (Non-PDF Mode)
-              </p>
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: '1fr 1fr', 
@@ -219,15 +252,17 @@ export default function Dashboard() {
           {/* Attempt History Section */}
           <div style={{
             padding: '12px 16px 8px 16px',
-            background: 'rgba(124, 156, 255, 0.05)',
-            borderBottom: '1px solid var(--border)'
+            background: 'rgba(124, 156, 255, 0.08)',
+            borderBottom: '2px solid var(--accent)',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
           }}>
             <h3 style={{
               margin: 0,
               fontSize: '0.9em',
-              fontWeight: 700,
+              fontWeight: 900,
               color: 'var(--accent)',
-              letterSpacing: '0.5px'
+              letterSpacing: '0.5px',
+              textAlign: 'center'
             }}>
               📋 ATTEMPT HISTORY
             </h3>
@@ -343,23 +378,26 @@ export default function Dashboard() {
                     }}
                     style={{
                       width: '100%',
-                      padding: '6px 12px',
+                      padding: '8px 12px',
                       background: 'var(--accent)',
                       color: 'white',
                       border: 'none',
-                      borderRadius: 6,
+                      borderRadius: 8,
                       cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: '0.75em',
+                      fontWeight: 700,
+                      fontSize: '0.8em',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 6,
-                      marginTop: 8
+                      gap: 8,
+                      marginTop: 8,
+                      transition: 'all 0.2s ease'
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   >
                     <span>📝</span>
-                    <span>Show Details</span>
+                    <span>View Full Quiz & Analysis & Analysis</span>
                   </button>
                 </div>
               );
@@ -402,7 +440,7 @@ export default function Dashboard() {
               <div style={{fontSize:'1em', lineHeight:1.8}}>Click on a PDF tile on the right to view detailed performance analytics</div>
             </div>
           ) : (() => {
-            const s = data.summary.find(doc => doc.documentId === selectedDoc);
+            const s = filteredSummary.find(doc => doc.documentId === selectedDoc);
             if (!s) return null;
             
             return (
@@ -620,7 +658,7 @@ export default function Dashboard() {
                             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)' }
                           >
                             <span>📝</span>
-                            <span>Show Details</span>
+                            <span>View Full Quiz & Analysis & Analysis</span>
                           </button>
                         </div>
                       ))}
@@ -654,6 +692,11 @@ export default function Dashboard() {
             <div style={{fontSize: '1em', fontWeight: 900, color: 'var(--accent)', textAlign: 'center', letterSpacing: '1px'}}>
               📚 PDF LIBRARY
             </div>
+            {data?.summary && data.summary.length > 0 && (
+              <div style={{fontSize: '0.7em', color: 'var(--muted)', textAlign: 'center', marginTop: 4}}>
+                {searchQuery ? `${filteredSummary.length} of ${data.summary.length}` : `${data.summary.length} PDF${data.summary.length !== 1 ? 's' : ''}`}
+              </div>
+            )}
           </div>
           
           {/* Scrollable Content */}
@@ -671,7 +714,14 @@ export default function Dashboard() {
               </div>
             )}
             
-            {data?.summary?.map((s)=> (
+            {!loading && !error && data?.summary && data.summary.length > 0 && filteredSummary.length === 0 && searchQuery && (
+              <div style={{textAlign:'center', padding:'40px 20px', color:'var(--muted)'}}>                <div style={{fontSize:'3em', marginBottom:'16px'}}>🔍</div>
+                <div style={{fontSize:'0.9em', lineHeight:1.6, fontWeight:600}}>No results found</div>
+                <div style={{fontSize:'0.75em', marginTop:8}}>for "{searchQuery}"</div>
+              </div>
+            )}
+            
+            {filteredSummary.map((s)=> (
               <div 
                 key={s.documentId}
                 onClick={()=>setSelectedDoc(selectedDoc === s.documentId ? null : s.documentId)}
@@ -708,6 +758,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
       </div>
       
       {selectedAttempt && (

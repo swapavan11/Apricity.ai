@@ -1381,7 +1381,7 @@ export default function Study({ selected, docs }) {
                             }}
                           >
                             <span>📝</span>
-                            <span>View Full Quiz</span>
+                            <span>View Full Quiz & Analysis & Analysis</span>
                           </button>
                         </div>
                       ))}

@@ -131,16 +131,23 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
               <div
                 key={a.id || i}
                 style={{
-                  background: 'var(--input-bg)',
-                  border: '1px solid var(--border)',
-                  borderLeft: '3px solid var(--accent)',
-                  borderRadius: 10,
-                  padding: '16px',
+                  background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.08) 0%, rgba(124, 156, 255, 0.03) 100%)',
+                  border: '2px solid rgba(124, 156, 255, 0.3)',
+                  borderRadius: 12,
+                  padding: '18px',
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 2px 8px rgba(124, 156, 255, 0.2)'
                 }}
                 onClick={() => setSelectedAttempt(a)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(124, 156, 255, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(124, 156, 255, 0.2)';
+                }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: '1.05em' }}>
@@ -164,22 +171,35 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
 
               <div style={{ 
                 display: 'flex', 
-                justifyContent: 'space-around',
-                padding: '12px 0',
-                borderTop: '1px solid var(--border)',
-                marginBottom: 12
+                gap: 12,
+                marginBottom: 12,
+                marginTop: 12
               }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.3em', fontWeight: 700, color: 'var(--accent)' }}>
+                <div style={{ 
+                  flex: 1,
+                  textAlign: 'center',
+                  padding: '12px',
+                  background: 'rgba(124, 156, 255, 0.15)',
+                  borderRadius: 8,
+                  border: '1px solid rgba(124, 156, 255, 0.3)'
+                }}>
+                  <div style={{ fontSize: '1.4em', fontWeight: 700, color: 'var(--accent)' }}>
                     {a.score}/{a.total}
                   </div>
-                  <div style={{ fontSize: '0.75em', color: 'var(--muted)' }}>Score</div>
+                  <div style={{ fontSize: '0.75em', color: 'var(--muted)', marginTop: 4 }}>Score</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.3em', fontWeight: 700, color: 'var(--accent2)' }}>
+                <div style={{ 
+                  flex: 1,
+                  textAlign: 'center',
+                  padding: '12px',
+                  background: 'rgba(124, 156, 255, 0.15)',
+                  borderRadius: 8,
+                  border: '1px solid rgba(124, 156, 255, 0.3)'
+                }}>
+                  <div style={{ fontSize: '1.1em', fontWeight: 700, color: 'var(--accent2)' }}>
                     {a.quizType}
                   </div>
-                  <div style={{ fontSize: '0.75em', color: 'var(--muted)' }}>Type</div>
+                  <div style={{ fontSize: '0.75em', color: 'var(--muted)', marginTop: 4 }}>Type</div>
                 </div>
               </div>
 
@@ -190,7 +210,7 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
                   }}
                   style={{
                     width: '100%',
-                    padding: '8px 14px',
+                    padding: '10px 16px',
                     background: 'var(--accent)',
                     color: 'white',
                     border: 'none',
@@ -205,9 +225,11 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
                     marginTop: 8,
                     transition: 'all 0.2s ease'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
                   <span>📝</span>
-                  <span>View Details</span>
+                  <span>View Full Quiz & Analysis</span>
                 </button>
               </div>
             );

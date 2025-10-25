@@ -129,7 +129,7 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                 }}
               >
                 <span>{hasActiveQuiz ? '▶️' : '🔄'}</span>
-                <span>{hasActiveQuiz ? 'Continue Quiz' : 'Retake Quiz'}</span>
+                <span>{hasActiveQuiz ? 'Retake Quiz' : 'Retake Quiz'}</span>
               </button>
             )}
             <button 
