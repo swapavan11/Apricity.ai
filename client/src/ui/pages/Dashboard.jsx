@@ -397,7 +397,7 @@ export default function Dashboard() {
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   >
                     <span>📝</span>
-                    <span>View Full Quiz & Analysis & Analysis</span>
+                    <span>View Full Quiz & Analysis</span>
                   </button>
                 </div>
               );
@@ -658,7 +658,7 @@ export default function Dashboard() {
                             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)' }
                           >
                             <span>📝</span>
-                            <span>View Full Quiz & Analysis & Analysis</span>
+                            <span>View Full Quiz & Analysis</span>
                           </button>
                         </div>
                       ))}
