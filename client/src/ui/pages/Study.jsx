@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import useApi from '../../api/useApi'
+import AttemptModal from '../../components/Study/AttemptModal'
 
 export default function Study({ selected, docs }) {
   const api = useApi()
@@ -24,15 +25,17 @@ export default function Study({ selected, docs }) {
   const [saqCount, setSaqCount] = useState(0)
   const [laqCount, setLaqCount] = useState(0)
   const [quizPrompt, setQuizPrompt] = useState('')
-  const [quizMode, setQuizMode] = useState('select') // 'auto' | 'select' | 'custom'
-  const [topicDocId, setTopicDocId] = useState(selected || 'all')
+  const [quizMode, setQuizMode] = useState('auto') // 'auto' | 'select' | 'custom'
   const [topicList, setTopicList] = useState([])
-  const [selectedTopic, setSelectedTopic] = useState('')
+  const [selectedTopics, setSelectedTopics] = useState([])
   const [validationError, setValidationError] = useState('')
+  const [parsingTopics, setParsingTopics] = useState(false)
+  const [fetchingTopics, setFetchingTopics] = useState(false)
   const [leftPanelWidth, setLeftPanelWidth] = useState(50)
   const [chatHistoryVisible, setChatHistoryVisible] = useState(false)
   const [attemptHistory, setAttemptHistory] = useState(null)
   const [loadingAttemptHistory, setLoadingAttemptHistory] = useState(false)
+  const [selectedAttempt, setSelectedAttempt] = useState(null)
  
 
   // Function to refresh YouTube recommendations
@@ -70,6 +73,10 @@ export default function Study({ selected, docs }) {
   };
 
   useEffect(() => {
+    // Clear topics and selected topics whenever selected changes
+    setTopicList([])
+    setSelectedTopics([])
+    
     if (selected && selected !== 'all') {
       api.listChats(selected).then((res)=> setChats(res.chats||[]))
       setActiveChatId(null)
@@ -78,22 +85,52 @@ export default function Study({ selected, docs }) {
       api.listChats(null).then((res)=> setChats(res.chats||[]))
       setActiveChatId(null)
       setAttemptHistory(null)
+      // If selected is 'all', switch quiz mode to auto
+      if (quizMode === 'select') {
+        setQuizMode('auto')
+      }
     }
   }, [selected])
 
-  // fetch topic list for a selected PDF when using Select mode
+  // Auto-fetch cached topics when select mode is enabled with a specific PDF
   useEffect(() => {
-    const docId = topicDocId === 'all' ? null : topicDocId
-    setTopicList([])
-    setSelectedTopic('')
-    if (!docId) return
-    let mounted = true
-    fetch(`/api/quiz/topics?documentId=${docId}`).then(r=>r.json()).then(j=>{
-      if (!mounted) return
-      if (j && Array.isArray(j.topics)) setTopicList(j.topics)
-    }).catch(()=>{})
-    return () => { mounted = false }
-  }, [topicDocId])
+    if (quizMode === 'select' && selected && selected !== 'all') {
+      console.log('Auto-fetching topics for PDF:', selected)
+      setFetchingTopics(true)
+      let mounted = true
+      fetch(`/api/quiz/topics?documentId=${selected}`).then(r=>r.json()).then(j=>{
+        if (!mounted) return
+        console.log('Topics fetched:', j)
+        if (j && Array.isArray(j.topics)) {
+          setTopicList(j.topics)
+        }
+      }).catch((err)=>{
+        console.error('Error fetching topics:', err)
+      }).finally(() => {
+        if (mounted) setFetchingTopics(false)
+      })
+      return () => { mounted = false }
+    }
+  }, [quizMode, selected])
+
+  const onParseTopics = async () => {
+    if (!selected || selected === 'all') return
+    console.log('Parsing topics for PDF:', selected)
+    setParsingTopics(true)
+    try {
+      const result = await api.parseTopics(selected)
+      console.log('Parse result:', result)
+      if (result.topics && Array.isArray(result.topics)) {
+        setTopicList(result.topics)
+        console.log('Topics set:', result.topics)
+      }
+    } catch (err) {
+      console.error('Topic parsing error:', err)
+      alert('Error parsing topics: ' + err.message)
+    } finally {
+      setParsingTopics(false)
+    }
+  }
 
   const onAsk = async () => {
     setAnswer('')
@@ -154,7 +191,7 @@ export default function Study({ selected, docs }) {
       if (quizMode === 'auto') {
         documentIdToUse = selected === 'all' ? null : selected
       } else if (quizMode === 'select') {
-        documentIdToUse = topicDocId === 'all' ? null : topicDocId
+        documentIdToUse = selected === 'all' ? null : selected
       } else if (quizMode === 'custom') {
         documentIdToUse = selected === 'all' ? null : selected
         instructionsToUse = quizPrompt
@@ -162,11 +199,9 @@ export default function Study({ selected, docs }) {
 
       const onewordCountVal = Math.max(0, Math.min(20, Number(onewordCount)||0))
 
-      // combine selected topic into instructions when using Select mode
+      // Use selectedTopics array for select mode
       let combinedInstructions = instructionsToUse || ''
-      if (quizMode === 'select' && selectedTopic) {
-        combinedInstructions = (combinedInstructions ? combinedInstructions + '\n' : '') + `Focus topic: ${selectedTopic}`
-      }
+      const topicsToUse = quizMode === 'select' ? selectedTopics : []
 
       // warn/abort if totals are very large
       const totalRequested = mcqCount + onewordCountVal + saqCountVal + laqCountVal
@@ -176,7 +211,7 @@ export default function Study({ selected, docs }) {
         return
       }
 
-      const res = await api.genQuiz(documentIdToUse, mcqCount, onewordCountVal, saqCountVal, laqCountVal, combinedInstructions, selectedTopic)
+      const res = await api.genQuiz(documentIdToUse, mcqCount, onewordCountVal, saqCountVal, laqCountVal, combinedInstructions, '', topicsToUse)
       setQuiz(res)
       setAnswers({})
       setScore(null)
@@ -192,7 +227,7 @@ export default function Study({ selected, docs }) {
   // Clear validation messages when relevant inputs change
   useEffect(() => {
     if (validationError) setValidationError('')
-  }, [quizCount, onewordCount, saqCount, laqCount, quizMode, selectedTopic, topicDocId, quizPrompt])
+  }, [quizCount, onewordCount, saqCount, laqCount, quizMode, selectedTopics, quizPrompt])
 
   const onScore = async () => {
     if (!quiz?.questions?.length) return
@@ -543,14 +578,19 @@ export default function Study({ selected, docs }) {
                 </div>
 
                 <div style={{marginBottom:'12px'}}>
+                  {/* Debug Info - Remove in production */}
+                  <div style={{fontSize:'11px', color:'var(--muted)', textAlign:'center', marginBottom:8, fontFamily:'monospace'}}>
+                    Debug: selected={selected || 'null'} | quizMode={quizMode} | topicList={topicList.length} | selectedTopics={selectedTopics.length}
+                  </div>
+                  
                   <div style={{display:'flex', gap:12, alignItems:'center', justifyContent:'center', marginBottom:8}}>
                     <label style={{display:'flex', alignItems:'center', gap:8}}>
                       <input type="radio" name="quizMode" value="auto" checked={quizMode==='auto'} onChange={()=>setQuizMode('auto')} />
                       <span>Auto (use current source selector)</span>
                     </label>
                     <label style={{display:'flex', alignItems:'center', gap:8}}>
-              <input type="radio" name="quizMode" value="select" checked={quizMode==='select'} onChange={()=>{ if(docs.length>0) setQuizMode('select')}} disabled={docs.length === 0} />
-                      <span>Select Topic in PDF</span>
+                      <input type="radio" name="quizMode" value="select" checked={quizMode==='select'} onChange={()=>{ if(selected && selected !== 'all') setQuizMode('select') }} disabled={!selected || selected === 'all'} />
+                      <span>Select Topics from PDF {(!selected || selected === 'all') && '(Select a PDF first)'}</span>
                     </label>
                     <label style={{display:'flex', alignItems:'center', gap:8}}>
                       <input type="radio" name="quizMode" value="custom" checked={quizMode==='custom'} onChange={()=>setQuizMode('custom')} />
@@ -558,23 +598,102 @@ export default function Study({ selected, docs }) {
                     </label>
                   </div>
 
-                  {/* topic dropdown for select mode */}
-                  {quizMode === 'select' && (
-                    <div style={{display:'flex', justifyContent:'center', marginBottom:12}}>
-                      {docs.length === 0 ? (
-                        <div style={{color:'var(--muted)'}}>No uploaded PDFs yet. Upload a PDF to enable the Select option.</div>
-                      ) : (
-                        <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                          <select value={topicDocId} onChange={(e)=>setTopicDocId(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'var(--input-bg)', color:'var(--text)', border:'1px solid var(--border)'}}>
-                            <option value="all">All uploaded PDFs</option>
-                            {docs.map(d => <option key={d._id} value={d._id}>{d.title} ({d.pages}p)</option>)}
-                          </select>
-                          {topicList.length > 0 && (
-                            <select value={selectedTopic} onChange={(e)=>setSelectedTopic(e.target.value)} style={{padding:'8px 12px', borderRadius:8, background:'var(--input-bg)', color:'var(--text)', border:'1px solid var(--border)'}}>
-                              <option value="">All topics</option>
-                              {topicList.map((t, idx) => <option key={idx} value={t}>{t}</option>)}
-                            </select>
+                  {/* Topic selector for select mode */}
+                  {quizMode === 'select' && selected && selected !== 'all' && (
+                    <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:12, marginBottom:12, marginTop:12}}>
+                      <div style={{display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', justifyContent:'center'}}>
+                        <button 
+                          onClick={onParseTopics} 
+                          disabled={parsingTopics || fetchingTopics}
+                          style={{
+                            padding:'10px 20px', 
+                            borderRadius:8, 
+                            background: parsingTopics ? 'linear-gradient(90deg, var(--accent) 0%, rgba(124, 156, 255, 0.7) 50%, var(--accent) 100%)' : 'var(--accent)',
+                            backgroundSize: parsingTopics ? '200% 100%' : '100% 100%',
+                            color:'white', 
+                            border:'none', 
+                            cursor:(parsingTopics || fetchingTopics)?'not-allowed':'pointer', 
+                            opacity:(parsingTopics || fetchingTopics)?0.8:1, 
+                            fontWeight:600, 
+                            transition:'all 0.3s ease',
+                            boxShadow: parsingTopics ? '0 0 20px rgba(124, 156, 255, 0.4)' : '0 2px 8px rgba(0,0,0,0.2)',
+                            animation: parsingTopics ? 'shimmer 2s infinite linear' : 'none',
+                            display:'flex',
+                            alignItems:'center',
+                            gap:8
+                          }}
+                        >
+                          {parsingTopics ? (
+                            <>
+                              <span style={{display:'inline-block', animation:'spin 1s linear infinite'}}>⚡</span>
+                              <span>Extracting Topics...</span>
+                            </>
+                          ) : fetchingTopics ? (
+                            <>
+                              <span style={{display:'inline-block', animation:'spin 1s linear infinite'}}>🔄</span>
+                              <span>Loading...</span>
+                            </>
+                          ) : topicList.length > 0 ? (
+                            <>
+                              <span>🔄</span>
+                              <span>Re-parse Topics</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>🔍</span>
+                              <span>Parse PDF Topics</span>
+                            </>
                           )}
+                        </button>
+                      </div>
+                      
+                      {topicList.length > 0 && (
+                        <div style={{width:'90%', maxWidth:800, padding:16, background:'var(--panel)', border:'1px solid var(--border)', borderRadius:8, boxShadow:'0 2px 12px rgba(0,0,0,0.1)'}}>
+                          <div style={{marginBottom:12, fontWeight:600, color:'var(--text)', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                            <span>📚 Select Topics for Quiz:</span>
+                            <span style={{fontSize:'0.85em', color:'var(--muted)', background:'rgba(124, 156, 255, 0.1)', padding:'4px 12px', borderRadius:20}}>{selectedTopics.length} selected</span>
+                          </div>
+                          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:8, maxHeight:250, overflowY:'auto', padding:4}}>
+                            {topicList.map((topic, idx) => {
+                              const isSelected = selectedTopics.includes(topic)
+                              return (
+                                <label key={idx} style={{
+                                  display:'flex', 
+                                  alignItems:'center', 
+                                  gap:8, 
+                                  padding:'8px 12px', 
+                                  background:isSelected?'rgba(124, 156, 255, 0.15)':'var(--input-bg)', 
+                                  border:'1.5px solid '+(isSelected?'var(--accent)':'var(--border)'), 
+                                  borderRadius:6, 
+                                  cursor:'pointer', 
+                                  transition:'all 0.2s ease', 
+                                  fontSize:'0.9em',
+                                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                                  boxShadow: isSelected ? '0 2px 8px rgba(124, 156, 255, 0.2)' : 'none'
+                                }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isSelected}
+                                    onChange={(e)=>{
+                                      if (e.target.checked) {
+                                        setSelectedTopics([...selectedTopics, topic])
+                                      } else {
+                                        setSelectedTopics(selectedTopics.filter(t => t !== topic))
+                                      }
+                                    }}
+                                    style={{accentColor:'var(--accent)', width:16, height:16}}
+                                  />
+                                  <span style={{flex:1, wordBreak:'break-word', fontWeight:isSelected?600:400}}>{topic}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {topicList.length === 0 && !parsingTopics && !fetchingTopics && (
+                        <div style={{color:'var(--muted)', fontSize:'0.9em', fontStyle:'italic', padding:'12px 20px', background:'rgba(124, 156, 255, 0.05)', borderRadius:8, border:'1px dashed var(--border)'}}>
+                          💡 Click "Parse PDF Topics" to extract main topics using AI
                         </div>
                       )}
                     </div>
@@ -1232,7 +1351,7 @@ export default function Study({ selected, docs }) {
                           )}
                           
                           {attempt.weaknesses && attempt.weaknesses.length > 0 && (
-                            <div>
+                            <div style={{marginBottom:'12px'}}>
                               <div style={{fontSize:'12px', color:'#ff7c7c', marginBottom:'4px', fontWeight:600}}>
                                 Areas to improve:
                               </div>
@@ -1241,6 +1360,29 @@ export default function Study({ selected, docs }) {
                               </div>
                             </div>
                           )}
+                          
+                          {/* View Details Button */}
+                          <button
+                            onClick={() => setSelectedAttempt(attempt)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 16px',
+                              background: 'var(--accent)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                              fontSize: '0.9em',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 8
+                            }}
+                          >
+                            <span>📝</span>
+                            <span>View Full Quiz</span>
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1372,6 +1514,41 @@ export default function Study({ selected, docs }) {
           )}
         </div>
       </div>
+      
+      {/* Attempt Detail Modal */}
+      {selectedAttempt && (
+        <AttemptModal 
+          attempt={selectedAttempt}
+          documentId={selected}
+          onClose={() => setSelectedAttempt(null)}
+          onRetake={(options) => {
+            // If continuing active quiz, just switch to tab
+            if (options.continue) {
+              setActiveTab('quiz');
+              setSelectedAttempt(null);
+              return;
+            }
+            
+            // Switch to quiz tab with retake params
+            setActiveTab('quiz');
+            
+            // Pass quiz params and timer options to QuizSection
+            // QuizSection will use these to auto-generate the same quiz
+            const retakeData = {
+              quizParams: selectedAttempt.quizParams,
+              withTimer: options.withTimer,
+              timeLimit: options.timeLimit
+            };
+            
+            // We need to pass this to QuizSection somehow
+            // Since we can't directly pass props from Study page to QuizSection in Study component,
+            // we'll trigger a custom event
+            window.dispatchEvent(new CustomEvent('retakeQuiz', { detail: retakeData }));
+            
+            setSelectedAttempt(null);
+          }}
+        />
+      )}
     </div>
   )
 }

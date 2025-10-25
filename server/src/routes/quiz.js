@@ -40,6 +40,12 @@ router.get('/topics', authenticateToken, async (req, res) => {
   if (!doc) return res.status(404).json({ error: 'Document not found' });
   if (doc.uploadedBy && doc.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
 
+  // Return cached topics if available
+  if (doc.topics && doc.topics.length > 0) {
+    return res.json({ topics: doc.topics, cached: true });
+  }
+
+  // Extract topics if not cached
   const context = doc.chunks.slice(0, 60).map(c => `p.${c.page}: ${c.text.slice(0, 400)}`).join('\n');
   const system = 'You are an assistant that extracts a concise list of section/topic headings from a textbook. Output a JSON array of short topic strings.';
   const prompt = `List the major topics or section headings present in the following document. Return strictly a JSON array of short topic strings (no extra text).\n\nDocument excerpts:\n${context}`;
@@ -50,33 +56,115 @@ router.get('/topics', authenticateToken, async (req, res) => {
       // fallback: split by newlines and pick unique lines
       parsed = String(text || '').split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 12);
     }
-    return res.json({ topics: parsed });
+    
+    // Cache the extracted topics
+    await Document.findByIdAndUpdate(documentId, { topics: parsed });
+    
+    return res.json({ topics: parsed, cached: false });
   } catch (err) {
     console.error('Topics extraction failed', err);
     return res.status(500).json({ error: 'Failed to extract topics' });
   }
 });
 
+// POST /api/quiz/parse-topics - Manually trigger topic extraction with optional page range
+router.post('/parse-topics', authenticateToken, async (req, res) => {
+  const { documentId, startPage, endPage } = req.body;
+  if (!documentId) return res.status(400).json({ error: 'documentId required' });
+  const doc = await Document.findById(documentId);
+  if (!doc) return res.status(404).json({ error: 'Document not found' });
+  if (doc.uploadedBy && doc.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
+
+  // Determine chunks to analyze based on page range or PDF size
+  let chunksToAnalyze = doc.chunks;
+  if (startPage && endPage) {
+    // Filter chunks by page range
+    chunksToAnalyze = doc.chunks.filter(c => c.page >= startPage && c.page <= endPage);
+  } else if (doc.pages > 50) {
+    // For large PDFs without page range, return info to request page range
+    return res.json({ requiresPageRange: true, totalPages: doc.pages, message: 'PDF is large. Please specify page range for detailed topic extraction.' });
+  }
+
+  // Use more chunks for deeper analysis (up to 120 chunks or all available)
+  const maxChunks = Math.min(chunksToAnalyze.length, 120);
+  const context = chunksToAnalyze.slice(0, maxChunks).map(c => `p.${c.page}: ${c.text.slice(0, 500)}`).join('\n');
+  
+  const system = 'You are an expert at analyzing academic documents and extracting comprehensive topic structures. Output a JSON array of detailed topic strings that represent main themes, chapters, or subject areas.';
+  const prompt = `Analyze the following document and extract ALL major topics, themes, chapters, and subject areas. Be comprehensive and detailed. Include:
+- Main chapter or section titles
+- Key concepts and themes
+- Subject areas covered
+- Important subtopics
+
+Return strictly a JSON array of topic strings (15-25 topics). Each topic should be clear and specific.\n\nDocument excerpts:\n${context}`;
+  
+  try {
+    const text = await generateText({ prompt, system, temperature: 0.0 });
+    let parsed = parseJsonArray(text);
+    if (!parsed) {
+      // fallback: split by newlines and pick unique lines
+      parsed = String(text || '').split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 20);
+    }
+    
+    // Update the document with extracted topics
+    await Document.findByIdAndUpdate(documentId, { topics: parsed });
+    
+    return res.json({ topics: parsed, success: true, pageRange: startPage && endPage ? { start: startPage, end: endPage } : null });
+  } catch (err) {
+    console.error('Topics extraction failed', err);
+    return res.status(500).json({ error: 'Failed to extract topics' });
+  }
+});
+
+// POST /api/quiz/add-topic - Add a custom topic to document
+router.post('/add-topic', authenticateToken, async (req, res) => {
+  const { documentId, topic } = req.body;
+  if (!documentId || !topic) return res.status(400).json({ error: 'documentId and topic required' });
+  
+  const doc = await Document.findById(documentId);
+  if (!doc) return res.status(404).json({ error: 'Document not found' });
+  if (doc.uploadedBy && doc.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
+  
+  const trimmedTopic = topic.trim();
+  if (!trimmedTopic) return res.status(400).json({ error: 'Topic cannot be empty' });
+  
+  // Add topic if it doesn't already exist
+  const currentTopics = doc.topics || [];
+  if (!currentTopics.includes(trimmedTopic)) {
+    currentTopics.push(trimmedTopic);
+    await Document.findByIdAndUpdate(documentId, { topics: currentTopics });
+  }
+  
+  return res.json({ topics: currentTopics, success: true });
+});
+
 router.post('/generate', authenticateToken, async (req, res) => {
-  const { documentId, mcqCount = 5, onewordCount = 0, saqCount = 0, laqCount = 0, instructions = '', topic = '' } = req.body;
+  const { documentId, mcqCount = 5, onewordCount = 0, saqCount = 0, laqCount = 0, instructions = '', topic = '', topics = [] } = req.body;
   let docs = [];
+  let context = '';
+  
   if (documentId) {
     const d = await Document.findById(documentId);
     if (!d) return res.status(404).json({ error: 'Document not found' });
     if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
     docs = [d];
+    
+    // estimate pages available
+    const totalPages = docs.reduce((s, d) => s + (d.pages || 0), 0) || 1;
+    const requestedTotal = Number(mcqCount||0) + Number(onewordCount||0) + Number(saqCount||0) + Number(laqCount||0);
+    // if user requests too many questions relative to pages, warn
+    if (requestedTotal > totalPages * 6) {
+      return res.status(400).json({ error: `Too many questions requested for document size (${requestedTotal} > ${totalPages * 6}). Reduce counts.` });
+    }
+    context = docs.flatMap(d => d.chunks.slice(0, 40)).map(c => `Doc: ${c.page}: ${c.text.slice(0, 600)}`).join('\n');
   } else {
-    docs = await Document.find({ uploadedBy: req.user._id });
+    // General mode without PDF - use instructions as context
+    if (!instructions || !instructions.trim()) {
+      return res.status(400).json({ error: 'Instructions are required for general quiz mode' });
+    }
+    context = `Generate quiz questions based on the following topic/subject:\n${instructions}`;
   }
-  if (!docs.length) return res.status(404).json({ error: 'No documents found' });
-  // estimate pages available
-  const totalPages = docs.reduce((s, d) => s + (d.pages || 0), 0) || 1;
-  const requestedTotal = Number(mcqCount||0) + Number(onewordCount||0) + Number(saqCount||0) + Number(laqCount||0);
-  // if user requests too many questions relative to pages, warn
-  if (requestedTotal > totalPages * 6) {
-    return res.status(400).json({ error: `Too many questions requested for document size (${requestedTotal} > ${totalPages * 6}). Reduce counts.` });
-  }
-  const context = docs.flatMap(d => d.chunks.slice(0, 40)).map(c => `Doc: ${c.page}: ${c.text.slice(0, 600)}`).join('\n');
+  
   const system = 'You generate rigorous quizzes from academic textbooks. Output strict JSON matching schema.';
   // sanitize instructions: strip question count patterns so users who paste counts don't affect generation
   function sanitizeInstructions(inp) {
@@ -93,7 +181,10 @@ router.post('/generate', authenticateToken, async (req, res) => {
   }
 
   const sanitizedInstructions = sanitizeInstructions(instructions);
-  const instructionBlock = ((sanitizedInstructions ? `User Instructions: ${sanitizedInstructions}\n` : '') + (topic ? `Focus Topic: ${topic}\n` : '')) || '';
+  // Handle both single topic (backward compatibility) and multiple topics
+  const topicsList = Array.isArray(topics) && topics.length > 0 ? topics : (topic ? [topic] : []);
+  const topicsInstruction = topicsList.length > 0 ? `Focus Topics: ${topicsList.join(', ')}\n` : '';
+  const instructionBlock = ((sanitizedInstructions ? `User Instructions: ${sanitizedInstructions}\n` : '') + topicsInstruction) || '';
   const prompt = `Create a quiz with ${mcqCount} MCQs, ${saqCount} SAQs, and ${laqCount} LAQs from the context.${instructionBlock} 
 MCQ: 4 options, answerIndex 0-3. SAQ: short text answer. LAQ: detailed text answer.
 Schema: {"questions":[{"id":"string","type":"MCQ|SAQ|LAQ","question":"string","options":["A","B","C","D"] (MCQ only),"answerIndex":0 (MCQ only),"answer":"string (SAQ/LAQ)","page":number,"explanation":"string"}]}.\nContext:\n${context}`;
@@ -133,17 +224,20 @@ Schema: {"questions":[{"id":"string","type":"MCQ|SAQ|LAQ","question":"string","o
         };
       }
     });
-  res.json(parsed);
+  res.json({ questions: parsed.questions });
 });
 
 router.post('/score', authenticateToken, async (req, res) => {
-  const { documentId, answers, questions } = req.body;
+  const { answers, questions, documentId, timeTaken, timeLimit, wasTimedOut, quizParams } = req.body;
   if (!Array.isArray(answers) || !Array.isArray(questions)) return res.status(400).json({ error: 'Invalid payload' });
   
   let correct = 0;
   const questionResults = [];
   
-  // Process each question and collect detailed results
+  // Process each question and collect detailed results with marks
+  let totalMarks = 0;
+  let obtainedMarks = 0;
+  
   const results = await Promise.all(questions.map(async (q, i) => {
     const questionId = q.id || `q_${i}`;
     const page = q.page || 1;
@@ -153,12 +247,25 @@ router.post('/score', authenticateToken, async (req, res) => {
     const topic = extractTopic(questionText);
     const difficulty = determineDifficulty(questionText, q.type);
     
+    // Assign marks based on question type
+    const marksPerType = {
+      'MCQ': 1,
+      'ONEWORD': 1,
+      'SAQ': 2,
+      'LAQ': 3
+    };
+    const questionMarks = marksPerType[q.type] || 1;
+    totalMarks += questionMarks;
+    
     let result;
     if (q.type === 'MCQ') {
       const expectedIndex = Number.isInteger(q.answerIndex) ? q.answerIndex : 0;
       const userIndex = Number.isInteger(answers[i]) ? answers[i] : (typeof answers[i] === 'string' ? q.options.indexOf(answers[i]) : -1);
       const isCorrect = userIndex === expectedIndex;
-      if (isCorrect) correct++;
+      if (isCorrect) {
+        correct++;
+        obtainedMarks += questionMarks;
+      }
       
       result = { 
         id: questionId, 
@@ -177,7 +284,14 @@ router.post('/score', authenticateToken, async (req, res) => {
         partial: false,
         page,
         topic,
-        difficulty
+        difficulty,
+        question: questionText,
+        options: q.options || [],
+        userAnswer: q.options?.[userIndex] || '',
+        correctAnswer: q.options?.[expectedIndex] || '',
+        explanation: q.explanation || '',
+        marksObtained: isCorrect ? questionMarks : 0,
+        totalMarks: questionMarks
       });
     } else if (q.type === 'ONEWORD') {
       // One-word questions: prefer deterministic exact/number match. Normalize and compare.
@@ -240,7 +354,12 @@ router.post('/score', authenticateToken, async (req, res) => {
         }
       }
 
-      if (isCorrect) correct++;
+      if (isCorrect) {
+        correct++;
+        obtainedMarks += questionMarks;
+      } else if (isPartial) {
+        obtainedMarks += questionMarks * 0.5; // Half marks for partial
+      }
 
       result = {
         id: questionId,
@@ -258,7 +377,13 @@ router.post('/score', authenticateToken, async (req, res) => {
         partial: isPartial,
         page,
         topic,
-        difficulty
+        difficulty,
+        question: questionText,
+        userAnswer,
+        correctAnswer: expectedAnswer,
+        explanation: q.explanation || '',
+        marksObtained: isCorrect ? questionMarks : (isPartial ? questionMarks * 0.5 : 0),
+        totalMarks: questionMarks
       });
 
     } else {
@@ -275,7 +400,13 @@ router.post('/score', authenticateToken, async (req, res) => {
           partial: false,
           page,
           topic,
-          difficulty
+          difficulty,
+          question: questionText,
+          userAnswer,
+          correctAnswer: expectedAnswer,
+          explanation: q.explanation || '',
+          marksObtained: 0,
+          totalMarks: questionMarks
         });
       } else {
         try {
@@ -294,7 +425,12 @@ router.post('/score', authenticateToken, async (req, res) => {
 
           const isCorrect = gradeToken === 'CORRECT';
           const isPartial = gradeToken === 'PARTIAL';
-          if (isCorrect) correct++;
+          if (isCorrect) {
+            correct++;
+            obtainedMarks += questionMarks;
+          } else if (isPartial) {
+            obtainedMarks += questionMarks * 0.5; // Half marks for partial
+          }
 
           result = {
             id: questionId,
@@ -313,7 +449,13 @@ router.post('/score', authenticateToken, async (req, res) => {
             partial: isPartial,
             page,
             topic,
-            difficulty
+            difficulty,
+            question: questionText,
+            userAnswer,
+            correctAnswer: expectedAnswer,
+            explanation: q.explanation || '',
+            marksObtained: isCorrect ? questionMarks : (isPartial ? questionMarks * 0.5 : 0),
+            totalMarks: questionMarks
           });
         } catch (err) {
           console.error('Scoring error for', questionId, err);
@@ -325,7 +467,13 @@ router.post('/score', authenticateToken, async (req, res) => {
             partial: false,
             page,
             topic,
-            difficulty
+            difficulty,
+            question: questionText,
+            userAnswer,
+            correctAnswer: expectedAnswer,
+            explanation: q.explanation || '',
+            marksObtained: 0,
+            totalMarks: questionMarks
           });
         }
       }
@@ -391,11 +539,41 @@ router.post('/score', authenticateToken, async (req, res) => {
     }
   });
   
+  // Get suggested topics based on incorrect answers
+  let suggestedTopics = [];
+  
+  // Only suggest topics if user didn't get perfect score
+  if (obtainedMarks < totalMarks) {
+    // Collect topics from questions that were answered incorrectly
+    const incorrectTopics = new Set();
+    questionResults.forEach(result => {
+      if (!result.correct && !result.partial && result.topic) {
+        incorrectTopics.add(result.topic);
+      }
+    });
+    
+    // Convert to array and limit to top 5
+    suggestedTopics = Array.from(incorrectTopics).slice(0, 5);
+    
+    // If we have a PDF and no incorrect topics were found (edge case),
+    // fall back to weak areas from topic analysis
+    if (suggestedTopics.length === 0 && documentId) {
+      const doc = await Document.findById(documentId);
+      if (doc && doc.topics && Array.isArray(doc.topics)) {
+        const weakTopics = weaknesses.map(w => w.toLowerCase());
+        suggestedTopics = doc.topics.filter(pdfTopic => {
+          const lower = pdfTopic.toLowerCase();
+          return weakTopics.some(w => lower.includes(w) || w.includes(lower));
+        }).slice(0, 5);
+      }
+    }
+  }
+  
   // Create detailed attempt record
   const attemptData = {
     quizType: 'mixed',
-    score,
-    total,
+    score: obtainedMarks,
+    total: totalMarks,
     questionResults,
     overallAccuracy,
     mcqAccuracy,
@@ -404,7 +582,12 @@ router.post('/score', authenticateToken, async (req, res) => {
     onewordAccuracy,
     topics,
     strengths: strengths.slice(0, 5),
-    weaknesses: weaknesses.slice(0, 5)
+    weaknesses: weaknesses.slice(0, 5),
+    suggestedTopics,
+    timeTaken: timeTaken || 0,
+    timeLimit: timeLimit || null,
+    wasTimedOut: wasTimedOut || false,
+    quizParams: quizParams || null
   };
   
   if (documentId) {
@@ -415,11 +598,19 @@ router.post('/score', authenticateToken, async (req, res) => {
 
     // Invalidate dashboard cache to ensure fresh data
     invalidateCache();
+  } else {
+    // No document ID - this is a general/non-PDF quiz
+    // Save to user's general attempts
+    const User = (await import('../models/User.js')).default;
+    await User.findByIdAndUpdate(req.user._id, { $push: { generalAttempts: attemptData } });
+    
+    // Invalidate dashboard cache
+    invalidateCache();
   }
   
   res.json({ 
-    score, 
-    total, 
+    score: obtainedMarks, 
+    total: totalMarks, 
     results,
     analytics: {
       overallAccuracy,
@@ -429,7 +620,8 @@ router.post('/score', authenticateToken, async (req, res) => {
       onewordAccuracy,
       topics,
       strengths: strengths.slice(0, 3),
-      weaknesses: weaknesses.slice(0, 3)
+      weaknesses: weaknesses.slice(0, 3),
+      suggestedTopics
     }
   });
 });

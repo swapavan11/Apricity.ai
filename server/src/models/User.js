@@ -102,6 +102,54 @@ const userSchema = new mongoose.Schema({
   chats: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Chat'
+  }],
+  // General quiz attempts (non-PDF based)
+  generalAttempts: [{
+    quizType: String,
+    score: Number,
+    total: Number,
+    questionResults: [{
+      questionId: String,
+      type: { type: String, enum: ['MCQ', 'SAQ', 'LAQ', 'ONEWORD'] },
+      correct: Boolean,
+      partial: { type: Boolean, default: false },
+      topic: String,
+      difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },
+      timeSpent: Number,
+      question: String,
+      options: [String],
+      userAnswer: String,
+      correctAnswer: String,
+      explanation: String,
+      marksObtained: Number,
+      totalMarks: Number
+    }],
+    overallAccuracy: Number,
+    mcqAccuracy: Number,
+    saqAccuracy: Number,
+    laqAccuracy: Number,
+    onewordAccuracy: Number,
+    topics: [{
+      name: String,
+      accuracy: Number,
+      questionsCount: Number
+    }],
+    strengths: [String],
+    weaknesses: [String],
+    suggestedTopics: [String],
+    timeTaken: Number,
+    timeLimit: Number,
+    wasTimedOut: { type: Boolean, default: false },
+    quizParams: {
+      mode: String,
+      mcqCount: Number,
+      onewordCount: Number,
+      saqCount: Number,
+      laqCount: Number,
+      topics: [String],
+      instructions: String
+    },
+    createdAt: { type: Date, default: Date.now }
   }]
 }, {
   timestamps: true

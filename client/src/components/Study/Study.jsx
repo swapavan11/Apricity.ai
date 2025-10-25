@@ -46,6 +46,7 @@ export default function Study({ selected, docs }) {
   const [attemptHistory, setAttemptHistory] = useState(null);
   const [loadingAttemptHistory, setLoadingAttemptHistory] = useState(false);
   const [notebookOpen, setNotebookOpen] = useState(false);
+  const [retakeParams, setRetakeParams] = useState(null);
 
   // Helper: refresh YouTube suggestions (used from UI)
   const refreshYouTubeRecommendations = async () => {
@@ -62,15 +63,18 @@ export default function Study({ selected, docs }) {
     }
   };
 
-  // Load attempt history for the currently selected PDF
+  // Load attempt history for the currently selected PDF or general quizzes
   const loadAttemptHistory = async () => {
-    if (selected === "all") {
-      setAttemptHistory(null);
-      return;
-    }
     setLoadingAttemptHistory(true);
     try {
-      const history = await api.getAttemptHistory(selected);
+      let history;
+      if (selected === "all") {
+        // Load general (non-PDF) quiz attempts
+        history = await api.getGeneralAttemptHistory();
+      } else {
+        // Load PDF-specific attempts
+        history = await api.getAttemptHistory(selected);
+      }
       setAttemptHistory(history);
     } catch (err) {
       console.error("Failed to load attempt history:", err);
@@ -90,18 +94,10 @@ export default function Study({ selected, docs }) {
         setChats(res.chats || []);
         setActiveChatId(null);
         setActiveChat(null);
-        if (selected && selected !== "all") {
-          await loadAttemptHistory();
-        } else {
-          setAttemptHistory(null);
-        }
+        // Load attempt history (works for both PDF and general quizzes)
+        await loadAttemptHistory();
       } catch (err) {
         console.error("Failed to list chats:", err);
-        if (mounted) {
-          setChats([]);
-          setActiveChatId(null);
-          setActiveChat(null);
-        }
       }
     })();
     return () => { mounted = false; }
@@ -266,7 +262,7 @@ export default function Study({ selected, docs }) {
           )}
 
           {activeTab === 'quiz' && (
-            <QuizSection api={api} selected={selected} docs={docs} loadAttemptHistory={loadAttemptHistory} />
+            <QuizSection api={api} selected={selected} docs={docs} loadAttemptHistory={loadAttemptHistory} retakeParams={retakeParams} />
           )}
 
           {activeTab === 'youtube' && (

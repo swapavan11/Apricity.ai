@@ -8,17 +8,25 @@ const ChunkSchema = new mongoose.Schema({
 
 const QuestionResultSchema = new mongoose.Schema({
   questionId: String,
-  type: { type: String, enum: ['MCQ', 'SAQ', 'LAQ'] },
+  type: { type: String, enum: ['MCQ', 'SAQ', 'LAQ', 'ONEWORD'] },
   correct: Boolean,
   partial: { type: Boolean, default: false },
   page: Number,
   topic: String, // Extracted from question content
   difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },
   timeSpent: Number, // in seconds (optional)
+  // Full question data for viewing later
+  question: String,
+  options: [String], // For MCQ
+  userAnswer: mongoose.Schema.Types.Mixed, // Can be string or number
+  correctAnswer: mongoose.Schema.Types.Mixed,
+  explanation: String,
+  marksObtained: Number,
+  totalMarks: Number,
 }, { _id: false });
 
 const AttemptSchema = new mongoose.Schema({
-  quizType: { type: String, enum: ['MCQ', 'SAQ', 'LAQ', 'mixed'] },
+  quizType: { type: String, enum: ['MCQ', 'SAQ', 'LAQ', 'ONEWORD', 'mixed'] },
   score: Number,
   total: Number,
   questionResults: [QuestionResultSchema],
@@ -26,6 +34,7 @@ const AttemptSchema = new mongoose.Schema({
   mcqAccuracy: Number,
   saqAccuracy: Number,
   laqAccuracy: Number,
+  onewordAccuracy: Number,
   topics: [{
     name: String,
     accuracy: Number,
@@ -33,6 +42,20 @@ const AttemptSchema = new mongoose.Schema({
   }],
   strengths: [String],
   weaknesses: [String],
+  suggestedTopics: [String], // Topics user should focus on
+  timeTaken: Number, // Total time taken in seconds
+  timeLimit: Number, // Time limit if it was a timed quiz (in seconds)
+  wasTimedOut: { type: Boolean, default: false }, // Whether quiz auto-submitted due to timeout
+  // Quiz generation parameters for retake
+  quizParams: {
+    mcqCount: Number,
+    onewordCount: Number,
+    saqCount: Number,
+    laqCount: Number,
+    mode: String, // 'auto' | 'select' | 'custom'
+    topics: [String], // For select mode
+    instructions: String // For custom mode
+  },
   createdAt: { type: Date, default: Date.now },
 }, { _id: false });
 
@@ -58,6 +81,7 @@ const DocumentSchema = new mongoose.Schema({
   },
   tags: [String],
   description: String,
+  topics: [String], // Extracted main topics from PDF content (cached)
   createdAt: { type: Date, default: Date.now },
 });
 

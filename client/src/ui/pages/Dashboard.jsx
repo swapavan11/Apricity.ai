@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import AttemptModal from '../../components/Study/AttemptModal'
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedDoc, setSelectedDoc] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
+  const [selectedAttempt, setSelectedAttempt] = useState(null)
+  const [selectedDocumentId, setSelectedDocumentId] = useState(null)
   
   const loadData = async () => {
     setLoading(true)
@@ -55,7 +60,14 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
+    <div style={{
+      width: '80%',
+      maxWidth: '1400px',
+      margin: '0 auto',
+      padding: '20px',
+      height: '100vh',
+      overflowY: 'auto'
+    }}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
         <h1 style={{marginTop:0, fontSize:'2.5em', background:'linear-gradient(135deg, var(--accent), var(--accent2))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent'}}>
           Progress Dashboard
@@ -103,7 +115,122 @@ export default function Dashboard() {
       )}
       {!loading && !error && data && (
         <div>
-          {data.summary?.length===0 && (
+          {/* General Quiz Stats Section */}
+          {data.generalQuizStats && (
+            <div className="section" style={{marginBottom:'24px', background:'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)', border:'2px solid var(--accent)', borderRadius:12}}>
+              <div style={{padding:'20px'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px'}}>
+                  <div>
+                    <div style={{fontWeight:700, fontSize:'1.3em', marginBottom:'4px', color:'var(--accent)', display:'flex', alignItems:'center', gap:'8px'}}>
+                      <span>🌐</span>
+                      <span>General Quizzes (Non-PDF)</span>
+                    </div>
+                    <div style={{fontSize:'0.9em', color:'var(--muted)'}}>
+                      Quizzes taken without a specific PDF context
+                    </div>
+                  </div>
+                </div>
+                
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:16, marginBottom:16}}>
+                  <div style={{textAlign:'center', padding:'12px', background:'rgba(0,0,0,0.2)', borderRadius:8}}>
+                    <div style={{fontSize:'0.85em', color:'var(--muted)', marginBottom:4}}>Total Attempts</div>
+                    <div style={{fontSize:'1.5em', fontWeight:700, color:'var(--accent)'}}>{data.generalQuizStats.totalAttempts}</div>
+                  </div>
+                  <div style={{textAlign:'center', padding:'12px', background:'rgba(0,0,0,0.2)', borderRadius:8}}>
+                    <div style={{fontSize:'0.85em', color:'var(--muted)', marginBottom:4}}>Avg Accuracy</div>
+                    <div style={{fontSize:'1.5em', fontWeight:700, color:getAccuracyColor(data.generalQuizStats.avgAccuracy)}}>
+                      {(data.generalQuizStats.avgAccuracy*100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div style={{textAlign:'center', padding:'12px', background:'rgba(0,0,0,0.2)', borderRadius:8}}>
+                    <div style={{fontSize:'0.85em', color:'var(--muted)', marginBottom:4}}>Total Questions</div>
+                    <div style={{fontSize:'1.5em', fontWeight:700}}>{data.generalQuizStats.totalQuestions}</div>
+                  </div>
+                  <div style={{textAlign:'center', padding:'12px', background:'rgba(0,0,0,0.2)', borderRadius:8}}>
+                    <div style={{fontSize:'0.85em', color:'var(--muted)', marginBottom:4}}>Correct Answers</div>
+                    <div style={{fontSize:'1.5em', fontWeight:700, color:'#6ee7b7'}}>{data.generalQuizStats.totalCorrect}</div>
+                  </div>
+                </div>
+                
+                {data.generalQuizStats.recentAttempts?.length > 0 && (
+                  <div>
+                    <div style={{fontWeight:600, fontSize:'1.05em', marginBottom:12, color:'var(--accent)'}}>Recent Attempts</div>
+                    <div style={{display:'grid', gap:'10px'}}>
+                      {data.generalQuizStats.recentAttempts.map((attempt, idx) => (
+                        <div 
+                          key={attempt.id || idx}
+                          style={{
+                            background:'#0d142c',
+                            border:'1px solid #1a244d',
+                            borderRadius:8,
+                            padding:'12px 16px',
+                            display:'flex',
+                            justifyContent:'space-between',
+                            alignItems:'center',
+                            cursor:'pointer',
+                            transition:'all 0.2s ease'
+                          }}
+                          onClick={() => {
+                            setSelectedAttempt(attempt);
+                            setSelectedDocumentId(null);
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background='#151d3a'}
+                          onMouseLeave={(e) => e.currentTarget.style.background='#0d142c'}
+                        >
+                          <div style={{flex:1}}>
+                            <div style={{fontWeight:600, marginBottom:4}}>
+                              Attempt #{attempt.attemptNumber}
+                            </div>
+                            <div style={{fontSize:'0.85em', color:'var(--muted)'}}>
+                              {new Date(attempt.createdAt).toLocaleString()}
+                            </div>
+                          </div>
+                          <div style={{display:'flex', alignItems:'center', gap:12}}>
+                            <div style={{textAlign:'right'}}>
+                              <div style={{fontSize:'0.85em', color:'var(--muted)'}}>Score</div>
+                              <div style={{fontWeight:600}}>{attempt.score}/{attempt.total}</div>
+                            </div>
+                            <div style={{
+                              background: attempt.overallAccuracy >= 0.8 ? '#6ee7b7' : 
+                                         attempt.overallAccuracy >= 0.6 ? '#ffa500' : '#ff7c7c',
+                              color: '#000',
+                              padding:'6px 12px',
+                              borderRadius:'6px',
+                              fontSize:'0.9em',
+                              fontWeight:600
+                            }}>
+                              {Math.round(attempt.overallAccuracy * 100)}%
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAttempt(attempt);
+                                setSelectedDocumentId(null);
+                              }}
+                              style={{
+                                padding:'6px 12px',
+                                background:'var(--accent)',
+                                color:'white',
+                                border:'none',
+                                borderRadius:6,
+                                cursor:'pointer',
+                                fontSize:'0.85em',
+                                fontWeight:600
+                              }}
+                            >
+                              View Full Quiz
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {data.summary?.length===0 && !data.generalQuizStats && (
             <div className="section" style={{textAlign:'center', padding:'40px'}}>
               <div style={{fontSize:'48px', marginBottom:'16px'}}>📊</div>
               <div style={{fontSize:'1.2em', marginBottom:'8px'}}>No attempts yet</div>
@@ -341,7 +468,7 @@ export default function Dashboard() {
                             )}
                             
                             {attempt.weaknesses && attempt.weaknesses.length > 0 && (
-                              <div>
+                              <div style={{marginBottom:'12px'}}>
                                 <div style={{fontSize:'12px', color:'#ff7c7c', marginBottom:'4px', fontWeight:600}}>
                                   Areas to improve:
                                 </div>
@@ -350,6 +477,32 @@ export default function Dashboard() {
                                 </div>
                               </div>
                             )}
+                            
+                            {/* View Quiz Button */}
+                            <button
+                              onClick={() => {
+                                setSelectedAttempt(attempt);
+                                setSelectedDocumentId(s.documentId);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px 16px',
+                                background: 'var(--accent)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                fontSize: '0.9em',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8
+                              }}
+                            >
+                              <span>📝</span>
+                              <span>View Full Quiz</span>
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -362,6 +515,42 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+      )}
+      
+      {/* Attempt Detail Modal */}
+      {selectedAttempt && (
+        <AttemptModal 
+          attempt={selectedAttempt}
+          documentId={selectedDocumentId}
+          onClose={() => {
+            setSelectedAttempt(null);
+            setSelectedDocumentId(null);
+          }}
+          onRetake={(options) => {
+            // Handle retake from Dashboard
+            if (options.continue) {
+              // For continue, just navigate to study page
+              navigate('/study');
+            } else {
+              // For retake, dispatch event and navigate
+              window.dispatchEvent(new CustomEvent('retakeQuiz', { 
+                detail: {
+                  quizParams: selectedAttempt.quizParams,
+                  withTimer: options.withTimer,
+                  timeLimit: options.timeLimit
+                }
+              }));
+              
+              // Navigate to study page after short delay
+              setTimeout(() => {
+                navigate('/study');
+              }, 100);
+            }
+            
+            setSelectedAttempt(null);
+            setSelectedDocumentId(null);
+          }}
+        />
       )}
     </div>
   )

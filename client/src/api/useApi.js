@@ -116,7 +116,8 @@ export default function useApi() {
     },
 
     // Quiz APIs
-    genQuiz: async (documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic) => {
+    genQuiz: async (documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic, topics) => {
+      console.log('[API] genQuiz called with:', { documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic, topics });
       const token = localStorage.getItem('token');
       const headers = { 
         "Content-Type": "application/json",
@@ -133,7 +134,36 @@ export default function useApi() {
           laqCount,
           instructions,
           topic,
+          topics,
         }),
+      });
+      const result = await res.json();
+      console.log('[API] genQuiz response:', result);
+      return result;
+    },
+    parseTopics: async (documentId, startPage, endPage) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/quiz/parse-topics`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ documentId, startPage, endPage }),
+      });
+      return res.json();
+    },
+    addTopic: async (documentId, topic) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/quiz/add-topic`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ documentId, topic }),
       });
       return res.json();
     },
@@ -161,6 +191,11 @@ export default function useApi() {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       return (await fetch(`${base}/api/progress/attempts/${documentId}`, { headers })).json();
+    },
+    getGeneralAttemptHistory: async () => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      return (await fetch(`${base}/api/progress/attempts/general/all`, { headers })).json();
     },
     youtube: async (q, documentId) => {
       const params = new URLSearchParams({ q: q || "" });

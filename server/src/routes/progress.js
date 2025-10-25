@@ -40,6 +40,11 @@ router.get('/', authenticateToken, async (req, res) => {
         }))
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       
+      // Get the most recent attempt date for sorting
+      const lastAttemptDate = sortedAttempts.length > 0 ? 
+        new Date(sortedAttempts[0].createdAt) : 
+        new Date(0); // Very old date if no attempts
+      
       return { 
         documentId: d._id, 
         title: d.title, 
@@ -48,6 +53,7 @@ router.get('/', authenticateToken, async (req, res) => {
         recentAccuracy,
         trends,
         attempts: sortedAttempts, // Include individual attempts
+        lastAttemptDate, // For sorting
         performance: {
           overallAccuracy: performance.overallAccuracy,
           mcqAccuracy: performance.mcqAccuracy,
@@ -61,7 +67,40 @@ router.get('/', authenticateToken, async (req, res) => {
       };
     });
     
-    const result = { summary };
+    // Sort summary by most recent quiz attempt (newest first)
+    summary.sort((a, b) => b.lastAttemptDate - a.lastAttemptDate);
+    
+    // Get general quiz stats
+    const User = (await import('../models/User.js')).default;
+    const user = await User.findById(req.user._id).select('generalAttempts');
+    
+    let generalQuizStats = null;
+    if (user && user.generalAttempts && user.generalAttempts.length > 0) {
+      const totalAttempts = user.generalAttempts.length;
+      const totalQuestions = user.generalAttempts.reduce((s, a) => s + (a.total || 0), 0);
+      const totalCorrect = user.generalAttempts.reduce((s, a) => s + (a.score || 0), 0);
+      const avgAccuracy = totalQuestions ? (totalCorrect / totalQuestions) : 0;
+      
+      // Get recent attempts (last 5)
+      const recentAttempts = user.generalAttempts
+        .slice(-5)
+        .reverse()
+        .map((attempt, index) => ({
+          ...attempt.toObject(),
+          attemptNumber: totalAttempts - index,
+          id: `general_${user.generalAttempts.length - 5 + index}`
+        }));
+      
+      generalQuizStats = {
+        totalAttempts,
+        avgAccuracy,
+        totalQuestions,
+        totalCorrect,
+        recentAttempts
+      };
+    }
+    
+    const result = { summary, generalQuizStats };
     
     // Cache the result
     setCache(result);
@@ -70,6 +109,36 @@ router.get('/', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Progress API error:', error);
     res.status(500).json({ error: 'Failed to load progress data' });
+  }
+});
+
+// Get general (non-PDF) attempt history
+router.get('/attempts/general/all', authenticateToken, async (req, res) => {
+  try {
+    const User = (await import('../models/User.js')).default;
+    const user = await User.findById(req.user._id).select('generalAttempts');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Sort attempts by creation date (newest first)
+    const sortedAttempts = user.generalAttempts
+      .map((attempt, index) => ({
+        ...attempt.toObject(),
+        attemptNumber: user.generalAttempts.length - index,
+        id: `general_${index}`
+      }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({
+      title: 'General Quizzes',
+      attempts: sortedAttempts,
+      totalAttempts: user.generalAttempts.length
+    });
+  } catch (error) {
+    console.error('General attempt history error:', error);
+    res.status(500).json({ error: 'Failed to load general attempt history' });
   }
 });
 

@@ -1,27 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import Loader from "../common/Loader";
+import AttemptModal from "./AttemptModal";
 
 export default function HistorySection({ selected, attemptHistory, loadingAttemptHistory }) {
-  if (selected === "all") {
-    return (
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--muted)",
-          textAlign: "center",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📊</div>
-          <div>Select a specific PDF to view attempt history</div>
-        </div>
-      </div>
-    );
-  }
-
+  const [selectedAttempt, setSelectedAttempt] = useState(null);
+  
   if (loadingAttemptHistory) return <Loader text="Loading attempt history..." />;
 
   if (!attemptHistory)
@@ -143,7 +126,7 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
               )}
 
               {a.weaknesses?.length > 0 && (
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: 8, marginBottom: 12 }}>
                   <div style={{ fontSize: "12px", color: "#ff7c7c", fontWeight: 600 }}>
                     Areas to Improve:
                   </div>
@@ -152,9 +135,59 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
                   </div>
                 </div>
               )}
+              
+              {/* View Full Quiz Button */}
+              <button
+                onClick={() => setSelectedAttempt(a)}
+                style={{
+                  width: '100%',
+                  padding: '8px 16px',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '0.9em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginTop: 12
+                }}
+              >
+                <span>📝</span>
+                <span>View Full Quiz</span>
+              </button>
             </div>
           ))}
         </div>
+      )}
+      
+      {/* Attempt Detail Modal */}
+      {selectedAttempt && (
+        <AttemptModal 
+          attempt={selectedAttempt}
+          documentId={selected}
+          onClose={() => setSelectedAttempt(null)}
+          onRetake={(options) => {
+            // If continuing active quiz, close modal
+            if (options.continue) {
+              setSelectedAttempt(null);
+              return;
+            }
+            
+            // Dispatch retake event
+            window.dispatchEvent(new CustomEvent('retakeQuiz', { 
+              detail: {
+                quizParams: selectedAttempt.quizParams,
+                withTimer: options.withTimer,
+                timeLimit: options.timeLimit
+              }
+            }));
+            setSelectedAttempt(null);
+          }}
+        />
       )}
     </div>
   );
