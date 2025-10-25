@@ -149,6 +149,10 @@ const userSchema = new mongoose.Schema({
       topics: [String],
       instructions: String
     },
+    // Quiz mode information
+    quizMode: String, // 'general', 'topic-specific', 'custom'
+    selectedTopics: [String], // Topics selected for mode 2
+    customInstruction: String, // Custom instruction for mode 3
     createdAt: { type: Date, default: Date.now }
   }]
 }, {

@@ -56,6 +56,10 @@ const AttemptSchema = new mongoose.Schema({
     topics: [String], // For select mode
     instructions: String // For custom mode
   },
+  // Quiz mode information
+  quizMode: String, // 'general', 'topic-specific', 'custom'
+  selectedTopics: [String], // Topics selected for mode 2
+  customInstruction: String, // Custom instruction for mode 3
   createdAt: { type: Date, default: Date.now },
 }, { _id: false });
 

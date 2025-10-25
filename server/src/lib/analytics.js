@@ -104,22 +104,29 @@ export async function analyzePerformance(attempts) {
   const strengths = [];
   const weaknesses = [];
 
-  if (mcqAccuracy >= 0.8) strengths.push('Multiple Choice Questions');
-  if (saqAccuracy >= 0.8) strengths.push('Short Answer Questions');
-  if (laqAccuracy >= 0.8) strengths.push('Long Answer Questions');
-
-  if (mcqAccuracy < 0.5) weaknesses.push('Multiple Choice Questions');
-  if (saqAccuracy < 0.5) weaknesses.push('Short Answer Questions');
-  if (laqAccuracy < 0.5) weaknesses.push('Long Answer Questions');
-
-  // Add topic-based strengths/weaknesses
+  // First prioritize topic-based strengths/weaknesses (avoid General)
   topicPerformance.forEach(topic => {
-    if (topic.accuracy >= 0.8 && topic.questionsCount >= 2) {
-      strengths.push(topic.name);
-    } else if (topic.accuracy < 0.5 && topic.questionsCount >= 2) {
-      weaknesses.push(topic.name);
+    if (topic.name !== 'General') {
+      if (topic.accuracy >= 0.8 && topic.questionsCount >= 2) {
+        strengths.push(topic.name);
+      } else if (topic.accuracy < 0.6 && topic.questionsCount >= 2) {
+        weaknesses.push(topic.name);
+      }
     }
   });
+
+  // Only add question type strengths/weaknesses if no specific topics found
+  if (strengths.length === 0) {
+    if (mcqAccuracy >= 0.8) strengths.push('Multiple Choice Questions');
+    if (saqAccuracy >= 0.8) strengths.push('Short Answer Questions');
+    if (laqAccuracy >= 0.8) strengths.push('Long Answer Questions');
+  }
+
+  if (weaknesses.length === 0) {
+    if (mcqAccuracy < 0.6) weaknesses.push('Multiple Choice Questions');
+    if (saqAccuracy < 0.6) weaknesses.push('Short Answer Questions');
+    if (laqAccuracy < 0.6) weaknesses.push('Long Answer Questions');
+  }
 
   return {
     overallAccuracy,
@@ -193,22 +200,29 @@ export function analyzePerformanceFast(attempts) {
   const strengths = [];
   const weaknesses = [];
 
-  if (mcqAccuracy >= 0.8) strengths.push('Multiple Choice Questions');
-  if (saqAccuracy >= 0.8) strengths.push('Short Answer Questions');
-  if (laqAccuracy >= 0.8) strengths.push('Long Answer Questions');
-
-  if (mcqAccuracy < 0.5) weaknesses.push('Multiple Choice Questions');
-  if (saqAccuracy < 0.5) weaknesses.push('Short Answer Questions');
-  if (laqAccuracy < 0.5) weaknesses.push('Long Answer Questions');
-
-  // Add topic-based strengths/weaknesses
+  // First prioritize topic-based strengths/weaknesses (avoid General)
   topicPerformance.forEach(topic => {
-    if (topic.accuracy >= 0.8 && topic.questionsCount >= 2) {
-      strengths.push(topic.name);
-    } else if (topic.accuracy < 0.5 && topic.questionsCount >= 2) {
-      weaknesses.push(topic.name);
+    if (topic.name !== 'General') {
+      if (topic.accuracy >= 0.8 && topic.questionsCount >= 2) {
+        strengths.push(topic.name);
+      } else if (topic.accuracy < 0.6 && topic.questionsCount >= 2) {
+        weaknesses.push(topic.name);
+      }
     }
   });
+
+  // Only add question type strengths/weaknesses if no specific topics found
+  if (strengths.length === 0) {
+    if (mcqAccuracy >= 0.8) strengths.push('Multiple Choice Questions');
+    if (saqAccuracy >= 0.8) strengths.push('Short Answer Questions');
+    if (laqAccuracy >= 0.8) strengths.push('Long Answer Questions');
+  }
+
+  if (weaknesses.length === 0) {
+    if (mcqAccuracy < 0.6) weaknesses.push('Multiple Choice Questions');
+    if (saqAccuracy < 0.6) weaknesses.push('Short Answer Questions');
+    if (laqAccuracy < 0.6) weaknesses.push('Long Answer Questions');
+  }
 
   return {
     overallAccuracy,

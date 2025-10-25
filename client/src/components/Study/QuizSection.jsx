@@ -490,7 +490,16 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Configuration form (shown when quiz not yet generated) */}
       {!quiz && (
-        <div style={{ flex: 1, overflowY: "auto", paddingRight: "8px" }}>
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: "8px", scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="hide-scrollbar">
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+            .hide-scrollbar {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+            }
+          `}</style>
           <div style={{ marginBottom: "20px" }}>
             <h3 style={{ marginTop: 0, marginBottom: "8px", color: "var(--accent)" }}>Quiz Generator</h3>
             <p style={{ color: "var(--muted)", marginBottom: "16px" }}>
@@ -985,7 +994,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
             </div>
           </div>
 
-          <div style={{ flex: 1, overflow: "auto" }}>
+          <div style={{ flex: 1, overflow: "auto", scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="hide-scrollbar">
             {quiz.questions?.map((q, idx) => {
               const resultMap = score ? Object.fromEntries(score.results.map((r) => [r.id, r])) : {};
               const result = resultMap[q.id];

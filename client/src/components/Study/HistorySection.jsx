@@ -4,6 +4,7 @@ import AttemptModal from "./AttemptModal";
 
 export default function HistorySection({ selected, attemptHistory, loadingAttemptHistory }) {
   const [selectedAttempt, setSelectedAttempt] = useState(null);
+  const [expandedQuizId, setExpandedQuizId] = useState(null);
   
   if (loadingAttemptHistory) return <Loader text="Loading attempt history..." />;
 
@@ -15,169 +16,218 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
     );
 
   return (
-    <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-      {attemptHistory.attempts.length === 0 ? (
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--muted)",
-            textAlign: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>📝</div>
-            <div>No quiz attempts found for this PDF</div>
-            <div style={{ fontSize: "14px", marginTop: "8px" }}>
-              Take a quiz to see your performance history
-            </div>
+    <div style={{ 
+      height: '100vh', 
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'var(--panel)'
+    }}>
+      {/* Header Ribbon */}
+      <div style={{ 
+        padding: '18px 28px', 
+        background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.12) 0%, rgba(124, 156, 255, 0.04) 100%)',
+        borderBottom: '2px solid var(--accent)',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+      }}>
+        {!selected ? (
+          /* Non-PDF General Mode */
+          <div style={{
+            fontSize: '1.2em',
+            fontWeight: 700,
+            color: 'var(--accent)',
+            textAlign: 'center'
+          }}>
+            📝 Non-PDF General Quiz Performance
           </div>
-        </div>
-      ) : (
-        <div>
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "12px",
-              background: "#0d142c",
-              borderRadius: 8,
-              border: "1px solid #1a244d",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: "4px" }}>{attemptHistory.title}</div>
-            <div style={{ fontSize: "14px", color: "var(--muted)" }}>
-              {attemptHistory.totalAttempts} attempt
-              {attemptHistory.totalAttempts !== 1 ? "s" : ""} completed
+        ) : (
+          /* PDF Selected Mode */
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center'
+          }}>
+            <div style={{
+              fontSize: '1.15em',
+              fontWeight: 700,
+              color: 'var(--text)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10
+            }}>
+              <span style={{ fontSize: '1.2em' }}>📚</span>
+              <span>{attemptHistory?.title || 'Loading...'}</span>
+              <span style={{
+                fontSize: '0.75em',
+                fontWeight: 600,
+                color: 'var(--muted)',
+                marginLeft: 8
+              }}>
+                • Quiz Performance
+              </span>
             </div>
+            {attemptHistory?.attempts?.length > 0 && (
+              <div style={{ 
+                padding: '8px 16px',
+                background: 'rgba(124, 156, 255, 0.2)',
+                borderRadius: 20,
+                border: '2px solid var(--accent)',
+                fontSize: '0.9em',
+                fontWeight: 700,
+                color: 'var(--accent)'
+              }}>
+                {attemptHistory.attempts.length} Attempt{attemptHistory.attempts.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
+        )}
+      </div>
 
-          {attemptHistory.attempts.map((a, i) => (
-            <div
-              key={a.id || i}
-              style={{
-                background: "#0d142c",
-                border: "1px solid #1a244d",
-                borderRadius: 10,
-                padding: 16,
-                marginBottom: 12,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                    Attempt #{a.attemptNumber}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-                    {new Date(a.createdAt).toLocaleString()}
-                  </div>
+      {/* Content Area */}
+      <div style={{ 
+        flex: 1, 
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        padding: '24px',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none'
+      }}
+      className="hide-scrollbar">
+        {!selected ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '120px 40px',
+            color: 'var(--muted)'
+          }}>
+            <div style={{ fontSize: '80px', marginBottom: '24px' }}>📄</div>
+            <div style={{ fontSize: '1.3em', fontWeight: 600, marginBottom: 12 }}>Upload to Learn & Gain Insights</div>
+            <div style={{ fontSize: '0.95em', lineHeight: 1.8, maxWidth: 500, margin: '0 auto' }}>
+              Upload a PDF and take quizzes to track your performance on specific documents. 
+              Your progress will be displayed here.
+            </div>
+          </div>
+        ) : attemptHistory.attempts.length === 0 ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '120px 40px',
+            color: 'var(--muted)'
+          }}>
+            <div style={{ fontSize: '80px', marginBottom: '24px' }}>📝</div>
+            <div style={{ fontSize: '1.3em', fontWeight: 600, marginBottom: 12 }}>No Quiz Attempts for This PDF</div>
+            <div style={{ fontSize: '0.95em', lineHeight: 1.8 }}>
+              Take a quiz on this PDF to see your performance history here
+            </div>
+          </div>
+        ) : (
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+            gap: '16px'
+          }}>
+            {attemptHistory.attempts.map((a, i) => {
+              const totalAttempts = attemptHistory.attempts.length;
+              const displayNumber = totalAttempts - i; // Latest attempt gets highest number
+              return (
+              <div
+                key={a.id || i}
+                style={{
+                  background: 'var(--input-bg)',
+                  border: '1px solid var(--border)',
+                  borderLeft: '3px solid var(--accent)',
+                  borderRadius: 10,
+                  padding: '16px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                }}
+                onClick={() => setSelectedAttempt(a)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: '1.05em' }}>
+                    Attempt #{displayNumber}
                 </div>
-                <div
-                  style={{
-                    background:
-                      a.overallAccuracy >= 0.8
-                        ? "#6ee7b7"
-                        : a.overallAccuracy >= 0.6
-                        ? "#ffa500"
-                        : "#ff7c7c",
-                    color: "#000",
-                    padding: "4px 8px",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}
-                >
+                <div style={{
+                  background: a.overallAccuracy >= 0.8 ? '#6ee7b7' : a.overallAccuracy >= 0.6 ? '#ffa500' : '#ff7c7c',
+                  color: '#000',
+                  padding: '4px 10px',
+                  borderRadius: 14,
+                  fontSize: '0.85em',
+                  fontWeight: 700
+                }}>
                   {Math.round(a.overallAccuracy * 100)}%
                 </div>
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-                  gap: 12,
-                  marginTop: 12,
-                }}
-              >
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "20px", fontWeight: 600, color: "var(--accent)" }}>
+              <div style={{ fontSize: '0.8em', color: 'var(--muted)', marginBottom: 12 }}>
+                {new Date(a.createdAt).toLocaleString()}
+              </div>
+
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-around',
+                padding: '12px 0',
+                borderTop: '1px solid var(--border)',
+                marginBottom: 12
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.3em', fontWeight: 700, color: 'var(--accent)' }}>
                     {a.score}/{a.total}
                   </div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>Score</div>
+                  <div style={{ fontSize: '0.75em', color: 'var(--muted)' }}>Score</div>
                 </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "20px", fontWeight: 600, color: "var(--accent2)" }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.3em', fontWeight: 700, color: 'var(--accent2)' }}>
                     {a.quizType}
                   </div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>Type</div>
+                  <div style={{ fontSize: '0.75em', color: 'var(--muted)' }}>Type</div>
                 </div>
               </div>
 
-              {a.strengths?.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: "12px", color: "var(--accent2)", fontWeight: 600 }}>
-                    Strengths:
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>
-                    {a.strengths.join(", ")}
-                  </div>
-                </div>
-              )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedAttempt(a);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 14px',
+                    background: 'var(--accent)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: '0.85em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    marginTop: 8,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <span>📝</span>
+                  <span>View Details</span>
+                </button>
+              </div>
+            );
+            })}
+          </div>
+        )}
+      </div>
 
-              {a.weaknesses?.length > 0 && (
-                <div style={{ marginTop: 8, marginBottom: 12 }}>
-                  <div style={{ fontSize: "12px", color: "#ff7c7c", fontWeight: 600 }}>
-                    Areas to Improve:
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>
-                    {a.weaknesses.join(", ")}
-                  </div>
-                </div>
-              )}
-              
-              {/* View Full Quiz Button */}
-              <button
-                onClick={() => setSelectedAttempt(a)}
-                style={{
-                  width: '100%',
-                  padding: '8px 16px',
-                  background: 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '0.9em',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  marginTop: 12
-                }}
-              >
-                <span>📝</span>
-                <span>View Full Quiz</span>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      
       {/* Attempt Detail Modal */}
       {selectedAttempt && (
-        <AttemptModal 
+        <AttemptModal
           attempt={selectedAttempt}
           documentId={selected}
           onClose={() => setSelectedAttempt(null)}
           onRetake={(options) => {
-            // If continuing active quiz, close modal
             if (options.continue) {
               setSelectedAttempt(null);
               return;
             }
             
-            // Dispatch retake event
             window.dispatchEvent(new CustomEvent('retakeQuiz', { 
               detail: {
                 quizParams: selectedAttempt.quizParams,

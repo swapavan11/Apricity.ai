@@ -231,6 +231,19 @@ router.post('/score', authenticateToken, async (req, res) => {
   const { answers, questions, documentId, timeTaken, timeLimit, wasTimedOut, quizParams } = req.body;
   if (!Array.isArray(answers) || !Array.isArray(questions)) return res.status(400).json({ error: 'Invalid payload' });
   
+  // Load document topics if available for better topic matching
+  let documentTopics = [];
+  if (documentId) {
+    try {
+      const doc = await Document.findById(documentId);
+      if (doc && doc.topics && Array.isArray(doc.topics)) {
+        documentTopics = doc.topics;
+      }
+    } catch (e) {
+      console.error('Error loading document topics:', e);
+    }
+  }
+  
   let correct = 0;
   const questionResults = [];
   
@@ -243,8 +256,25 @@ router.post('/score', authenticateToken, async (req, res) => {
     const page = q.page || 1;
     const questionText = q.question || '';
     
-    // Extract topic and determine difficulty
-    const topic = extractTopic(questionText);
+    // Extract topic with document context
+    let topic = q.topic || extractTopic(questionText);
+    
+    // If we have document topics, try to match the extracted topic to them
+    if (documentTopics.length > 0) {
+      const extractedLower = topic.toLowerCase();
+      // Find best matching document topic
+      const match = documentTopics.find(dt => {
+        const dtLower = dt.toLowerCase();
+        return dtLower.includes(extractedLower) || extractedLower.includes(dtLower);
+      });
+      if (match) {
+        topic = match; // Use the document's topic name
+      } else if (topic === 'General') {
+        // If extracted topic is too generic, use first document topic
+        topic = documentTopics[0];
+      }
+    }
+    
     const difficulty = determineDifficulty(questionText, q.type);
     
     // Assign marks based on question type
@@ -539,37 +569,58 @@ router.post('/score', authenticateToken, async (req, res) => {
     }
   });
   
-  // Get suggested topics based on incorrect answers
+  // Get suggested topics based on incorrect answers - improved logic
   let suggestedTopics = [];
   
   // Only suggest topics if user didn't get perfect score
   if (obtainedMarks < totalMarks) {
-    // Collect topics from questions that were answered incorrectly
-    const incorrectTopics = new Set();
+    // Collect topics from questions that were answered incorrectly with frequency count
+    const incorrectTopicFreq = new Map();
+    
     questionResults.forEach(result => {
-      if (!result.correct && !result.partial && result.topic) {
-        incorrectTopics.add(result.topic);
+      if (!result.correct && !result.partial) {
+        let topicToAdd = null;
+        
+        // Priority 1: Use the topic already assigned to the question
+        if (result.topic && result.topic !== 'General') {
+          topicToAdd = result.topic;
+        }
+        // Priority 2: Re-extract from question text with document context
+        else if (result.question) {
+          const extractedTopic = extractTopic(result.question);
+          if (extractedTopic && extractedTopic !== 'General') {
+            topicToAdd = extractedTopic;
+          }
+        }
+        
+        // Add to frequency map
+        if (topicToAdd) {
+          incorrectTopicFreq.set(topicToAdd, (incorrectTopicFreq.get(topicToAdd) || 0) + 1);
+        }
       }
     });
     
-    // Convert to array and limit to top 5
-    suggestedTopics = Array.from(incorrectTopics).slice(0, 5);
+    // Sort by frequency (most incorrect first) and convert to array
+    suggestedTopics = Array.from(incorrectTopicFreq.entries())
+      .sort((a, b) => b[1] - a[1]) // Sort by frequency descending
+      .map(([topic]) => topic) // Extract just the topic names
+      .slice(0, 5); // Top 5
     
-    // If we have a PDF and no incorrect topics were found (edge case),
-    // fall back to weak areas from topic analysis
-    if (suggestedTopics.length === 0 && documentId) {
-      const doc = await Document.findById(documentId);
-      if (doc && doc.topics && Array.isArray(doc.topics)) {
-        const weakTopics = weaknesses.map(w => w.toLowerCase());
-        suggestedTopics = doc.topics.filter(pdfTopic => {
-          const lower = pdfTopic.toLowerCase();
-          return weakTopics.some(w => lower.includes(w) || w.includes(lower));
-        }).slice(0, 5);
-      }
+    // If still no specific topics found, use weaknesses (but filter out question types)
+    if (suggestedTopics.length === 0 && weaknesses.length > 0) {
+      const specificWeaknesses = weaknesses.filter(w => 
+        !['Multiple Choice Questions', 'Short Answer Questions', 'Long Answer Questions'].includes(w)
+      );
+      suggestedTopics = specificWeaknesses.slice(0, 5);
+    }
+    
+    // If we have document topics and still no suggestions, use first 3 document topics as fallback
+    if (suggestedTopics.length === 0 && documentTopics.length > 0) {
+      suggestedTopics = documentTopics.slice(0, 3);
     }
   }
   
-  // Create detailed attempt record
+  // Create detailed attempt record with quiz mode information
   const attemptData = {
     quizType: 'mixed',
     score: obtainedMarks,
@@ -587,7 +638,11 @@ router.post('/score', authenticateToken, async (req, res) => {
     timeTaken: timeTaken || 0,
     timeLimit: timeLimit || null,
     wasTimedOut: wasTimedOut || false,
-    quizParams: quizParams || null
+    quizParams: quizParams || {},
+    // Quiz mode information
+    quizMode: quizParams?.mode || 'general', // 'general', 'topic-specific', or 'custom'
+    selectedTopics: quizParams?.topics || [], // For mode 2
+    customInstruction: quizParams?.instruction || '' // For mode 3
   };
   
   if (documentId) {
