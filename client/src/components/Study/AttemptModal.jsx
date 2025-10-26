@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 export default function AttemptModal({ attempt, onClose, onRetake, documentId }) {
   const [showRetakePrompt, setShowRetakePrompt] = useState(false);
@@ -236,23 +239,23 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                   display: 'inline-block',
                   boxShadow: '0 2px 8px rgba(124, 156, 255, 0.4)'
                 }}>
-                  {/* Default/General Mode */}
-                  {(!attempt.quizMode || attempt.quizMode === 'general') && '🎯 General Mode'}
-                  {/* Topic-Specific Mode (2nd radio - PDF parsed topics) */}
-                  {attempt.quizMode === 'topic-specific' && '📚 Topic-Specific Mode'}
-                  {/* Custom Mode (3rd radio - custom instruction) */}
-                  {attempt.quizMode === 'custom' && '✨ Custom Mode'}
+                  {/* 1st radio button - Default Mode (auto) */}
+                  {(!attempt.quizParams?.mode || attempt.quizParams?.mode === 'auto') && '🎯 Default Mode'}
+                  {/* 2nd radio button - PDF Parsed Topics Mode (select) */}
+                  {attempt.quizParams?.mode === 'select' && '📚 PDF Parsed Topics'}
+                  {/* 3rd radio button - Custom Instruction Mode (custom) */}
+                  {attempt.quizParams?.mode === 'custom' && '✨ Custom Instruction Mode'}
                 </span>
               </div>
 
-              {/* Selected Topics for Topic-Specific Mode */}
-              {attempt.selectedTopics && attempt.selectedTopics.length > 0 && (
+              {/* Selected Topics for select mode (2nd radio - PDF parsed topics) */}
+              {attempt.quizParams?.mode === 'select' && attempt.quizParams?.topics && attempt.quizParams.topics.length > 0 && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: '0.85em', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>
                     📚 Selected Topics:
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {attempt.selectedTopics.map((topic, idx) => (
+                    {attempt.quizParams.topics.map((topic, idx) => (
                       <span key={idx} style={{
                         padding: '6px 12px',
                         background: 'rgba(110, 231, 183, 0.2)',
@@ -270,11 +273,11 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                 </div>
               )}
 
-              {/* Custom Instruction for Custom Mode */}
-              {attempt.customInstruction && (
+              {/* Custom Instruction for custom mode (3rd radio) */}
+              {attempt.quizParams?.mode === 'custom' && attempt.quizParams?.instructions && (
                 <div>
                   <div style={{ fontSize: '0.85em', color: 'var(--muted)', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    ✨ Custom Instruction:
+                    ✨ User's Custom Instruction:
                   </div>
                   <div style={{
                     padding: '12px',
@@ -285,9 +288,11 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                     lineHeight: 1.7,
                     border: '2px solid rgba(255, 200, 100, 0.4)',
                     boxShadow: '0 2px 8px rgba(255, 200, 100, 0.2)',
-                    fontStyle: 'italic'
+                    fontStyle: 'italic',
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word'
                   }}>
-                    "{attempt.customInstruction}"
+                    "{attempt.quizParams.instructions}"
                   </div>
                 </div>
               )}
@@ -435,7 +440,15 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                           marginRight: 8,
                           color: 'var(--accent)'
                         }}>{q.type}</span>
-                        {q.question}
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={{
+                            p: ({node, ...props}) => <span {...props} />
+                          }}
+                        >
+                          {q.question}
+                        </ReactMarkdown>
                       </div>
                       {q.page && (
                         <div style={{ fontSize: '0.7em', color: 'var(--muted)', marginTop: 4 }}>
@@ -482,7 +495,15 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                             {isCorrectAnswer && <span style={{ color: '#6ee7b7' }}>✓</span>}
                             {isUserAnswer && !isCorrectAnswer && <span style={{ color: '#ff7c7c' }}>✗</span>}
                             <span style={{ color: isCorrectAnswer ? '#6ee7b7' : isUserAnswer ? '#ff7c7c' : 'var(--text)' }}>
-                              {option}
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkMath]}
+                                rehypePlugins={[rehypeKatex]}
+                                components={{
+                                  p: ({node, ...props}) => <span {...props} />
+                                }}
+                              >
+                                {option}
+                              </ReactMarkdown>
                             </span>
                           </div>
                         );
@@ -506,7 +527,16 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                           fontSize: '0.9em',
                           lineHeight: 1.5
                         }}>
-                          {q.userAnswer || <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>No answer provided</span>}
+                          {q.userAnswer ? (
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                            >
+                              {q.userAnswer}
+                            </ReactMarkdown>
+                          ) : (
+                            <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>No answer provided</span>
+                          )}
                         </div>
                       </div>
                       
@@ -523,7 +553,12 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                           fontSize: '0.9em',
                           lineHeight: 1.5
                         }}>
-                          {q.correctAnswer}
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                          >
+                            {q.correctAnswer}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </div>
@@ -557,7 +592,16 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                       color: 'var(--muted)',
                       lineHeight: 1.5
                     }}>
-                      <span style={{ fontWeight: 600, color: 'var(--accent)' }}>💡 Explanation:</span> {q.explanation}
+                      <span style={{ fontWeight: 600, color: 'var(--accent)' }}>💡 Explanation:</span>{" "}
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={{
+                          p: ({node, ...props}) => <span {...props} />
+                        }}
+                      >
+                        {q.explanation}
+                      </ReactMarkdown>
                     </div>
                   )}
                 </div>

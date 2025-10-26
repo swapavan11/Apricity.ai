@@ -1,4 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import Toast from "../Toast";
 
 export default function QuizSection({ api, selected, docs, loadAttemptHistory, retakeParams }) {
@@ -1003,7 +1006,16 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
               return (
                 <div className="section" key={q.id} style={{ marginTop: 10 }}>
                   <div style={{ fontWeight: 700 }}>
-                    {`Q${idx + 1}. [${q.type}] `} {q.question}
+                    {`Q${idx + 1}. [${q.type}] `}
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        p: ({node, ...props}) => <span {...props} />
+                      }}
+                    >
+                      {q.question}
+                    </ReactMarkdown>
                     {score && (
                       <span
                         style={{
@@ -1034,7 +1046,17 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                               onChange={() => setAnswers((a) => ({ ...a, [q.id]: oidx }))}
                               disabled={!!score}
                             />{" "}
-                            <span style={style}>{op}</span>
+                            <span style={style}>
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkMath]}
+                                rehypePlugins={[rehypeKatex]}
+                                components={{
+                                  p: ({node, ...props}) => <span {...props} />
+                                }}
+                              >
+                                {op}
+                              </ReactMarkdown>
+                            </span>
                           </label>
                         );
                       })}
@@ -1083,7 +1105,18 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                   {/* Explanation / Expected answer */}
                   {score && (
                     <div style={{ marginTop: 8, color: "var(--muted)" }}>
-                      <div>p.{q.page} • {q.explanation}</div>
+                      <div>
+                        p.{q.page} • 
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={{
+                            p: ({node, ...props}) => <span {...props} />
+                          }}
+                        >
+                          {q.explanation}
+                        </ReactMarkdown>
+                      </div>
                       {(q.type === "SAQ" || q.type === "LAQ" || q.type === "ONEWORD") && (
                         <div
                           style={{
@@ -1094,10 +1127,26 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                           }}
                         >
                           <div style={{ fontWeight: 700, color: "var(--text)" }}>Expected Answer:</div>
-                          <div style={{ whiteSpace: "pre-wrap" }}>{q.answer}</div>
+                          <div style={{ whiteSpace: "pre-wrap" }}>
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                            >
+                              {q.answer}
+                            </ReactMarkdown>
+                          </div>
                           {result && (
                             <div style={{ marginTop: 4, color: "var(--muted)" }}>
-                              Your Answer: {result.userAnswer}
+                              Your Answer: 
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkMath]}
+                                rehypePlugins={[rehypeKatex]}
+                                components={{
+                                  p: ({node, ...props}) => <span {...props} />
+                                }}
+                              >
+                                {result.userAnswer}
+                              </ReactMarkdown>
                             </div>
                           )}
                         </div>

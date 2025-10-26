@@ -74,98 +74,8 @@ export default function Dashboard() {
   ) || [];
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', flexDirection: 'column' }}>
-      {/* TOP RIBBON - Progress Dashboard & PDF Performance on same line */}
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)' }}>
-        {/* Left: Progress Dashboard - 25% */}
-        <div style={{
-          width: '25%',
-          padding: '20px 24px',
-          background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.12) 0%, rgba(124, 156, 255, 0.05) 100%)',
-          borderRight: '2px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <h1 style={{ 
-            margin: 0, 
-            fontSize: '1.3em', 
-            fontWeight: 900, 
-            color: 'var(--accent)',
-            letterSpacing: '0.5px',
-            textAlign: 'center'
-          }}>
-            📊 PROGRESS DASHBOARD
-          </h1>
-        </div>
-        
-        {/* Right: PDF Performance + Search + Refresh - 75% */}
-        <div style={{ 
-          width: '75%',
-          padding: '16px 24px',
-          background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.08) 0%, rgba(124, 156, 255, 0.02) 100%)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          {/* PDF Performance Title */}
-          <h2 style={{ 
-            margin: 0, 
-            fontSize: '1.1em', 
-            fontWeight: 700, 
-            color: 'var(--accent)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            letterSpacing: '0.5px'
-          }}>
-            📚 Individual PDF Performance
-          </h2>
-          
-          {/* Search & Refresh */}
-          <div style={{display:'flex', gap:12, alignItems:'center'}}>
-            <input 
-              type="text"
-              placeholder="Search PDFs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                padding:'8px 16px',
-                background:'var(--input-bg)',
-                border:'1px solid var(--border)',
-                borderRadius:8,
-                color:'var(--text)',
-                fontSize:'0.9em',
-                width:'200px'
-              }}
-            />
-            {lastRefresh && (
-              <button 
-                className="secondary" 
-                onClick={loadData}
-                disabled={loading}
-                title="Refresh all dashboard data"
-                style={{ 
-                  padding: '8px 14px', 
-                  fontSize: '0.85em', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 6
-                }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                {loading ? 'Refreshing...' : 'Refresh All'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* MAIN CONTENT - Split 25-75 */}
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      {/* MAIN CONTENT - Split 25-75 - No top ribbon, content extends from top */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* LEFT PANEL - 25% */}
         <div style={{ 
@@ -175,21 +85,39 @@ export default function Dashboard() {
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
-          {/* General Quizzes Header - Match PDF Library Style */}
+          {/* Progress Dashboard Header */}
           <div style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 10,
+            padding: '16px 24px',
+            background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.12) 0%, rgba(124, 156, 255, 0.05) 100%)',
+            borderBottom: '2px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <h1 style={{ 
+              margin: 0, 
+              fontSize: '1.3em', 
+              fontWeight: 900, 
+              color: 'var(--accent)',
+              letterSpacing: '0.5px',
+              textAlign: 'center'
+            }}>
+              📊 PROGRESS DASHBOARD
+            </h1>
+          </div>
+          
+          {/* General Quizzes Header */}
+          <div style={{
             background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(124, 156, 255, 0.08) 100%)',
             padding: '16px 14px',
             borderBottom: '2px solid var(--accent)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
           }}>
-            <div style={{fontSize: '1em', fontWeight: 900, color: 'var(--accent)', textAlign: 'center', letterSpacing: '1px'}}>
-              🎯 GENERAL QUIZZES
+            <div style={{fontSize: '0.9em', fontWeight: 900, color: 'var(--accent)', textAlign: 'center', letterSpacing: '1px'}}>
+              🎯 GENERAL QUIZZES - Non-PDF Mode
             </div>
             <div style={{fontSize: '0.7em', color: 'var(--muted)', textAlign: 'center', marginTop: 4}}>
-              Non-PDF Mode
+              
             </div>
           </div>
           
@@ -197,7 +125,7 @@ export default function Dashboard() {
           {!loading && data?.generalQuizStats && (
             <div style={{ 
               padding: '16px 16px 12px 16px',
-              borderBottom: '2px solid var(--border)',
+              // borderBottom: '2px solid var(--border)',
               background: 'rgba(124, 156, 255, 0.03)'
             }}>
               <div style={{ 
@@ -252,20 +180,35 @@ export default function Dashboard() {
           {/* Attempt History Section */}
           <div style={{
             padding: '12px 16px 8px 16px',
-            background: 'rgba(124, 156, 255, 0.08)',
-            borderBottom: '2px solid var(--accent)',
+            paddingTop: '0px',
+            paddingBottom:'0px',
+            // background: 'rgba(124, 156, 255, 0.08)',
+            
+              background: 'rgba(124, 156, 255, 0.03)',
+              // marginLeft:'15px',
+            
+            // borderBottom: '2px solid var(--accent)',
             boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
           }}>
             <h3 style={{
               margin: 0,
-              fontSize: '0.9em',
+              fontSize: '1em',
               fontWeight: 900,
               color: 'var(--accent)',
               letterSpacing: '0.5px',
-              textAlign: 'center'
+              // textAlign: 'center'
             }}>
-              📋 ATTEMPT HISTORY
+              📋 Attempt History
             </h3>
+            {/* Vertical Line */}
+            <div style={{
+              width: '100%',
+              height: '2px',
+              marginTop:'4px',
+              
+              background: 'var(--accent)',
+              boxShadow: '0 0 8px rgba(124, 156, 255, 0.6)'
+            }} />
           </div>
           
           {/* General Quiz Attempts List */}
@@ -274,6 +217,7 @@ export default function Dashboard() {
             overflowY: 'auto',
             overflowX: 'hidden',
             padding: '16px',
+            paddingBottom:'96px',
             scrollbarWidth: 'none',
             msOverflowStyle: 'none'
           }}
@@ -300,7 +244,7 @@ export default function Dashboard() {
           )}
           
           {!loading && !error && data?.generalQuizStats?.recentAttempts && data.generalQuizStats.recentAttempts.length > 0 && (
-            <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {data.generalQuizStats.recentAttempts.map((attempt, idx) => {
                 const totalAttempts = data.generalQuizStats.recentAttempts.length;
                 const displayNumber = totalAttempts - idx; // Latest attempt gets highest number
@@ -311,18 +255,17 @@ export default function Dashboard() {
                     background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.08) 0%, rgba(124, 156, 255, 0.03) 100%)',
                     border: '2px solid rgba(124, 156, 255, 0.3)',
                     borderRadius: 10,
-                    padding: '14px',
-                    marginBottom: 12,
+                    padding: '12px',
                     cursor: 'pointer',
                     transition: 'all 0.3s ease',
                     boxShadow: '0 2px 8px rgba(124, 156, 255, 0.2)'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateX(4px)';
+                    e.currentTarget.style.transform = 'scale(1.03)';
                     e.currentTarget.style.boxShadow = '0 4px 16px rgba(124, 156, 255, 0.4)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateX(0)';
+                    e.currentTarget.style.transform = 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 2px 8px rgba(124, 156, 255, 0.2)';
                   }}
                   onClick={() => {
@@ -330,43 +273,43 @@ export default function Dashboard() {
                     setSelectedDocumentId(null);
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.95em' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85em' }}>
                       Attempt #{displayNumber}
                     </div>
                     <div style={{
                       background: attempt.overallAccuracy >= 0.8 ? '#6ee7b7' : attempt.overallAccuracy >= 0.6 ? '#ffa500' : '#ff7c7c',
                       color: '#000',
-                      padding: '3px 8px',
-                      borderRadius: 12,
-                      fontSize: '0.75em',
+                      padding: '2px 6px',
+                      borderRadius: 10,
+                      fontSize: '0.7em',
                       fontWeight: 700
                     }}>
                       {Math.round(attempt.overallAccuracy * 100)}%
                     </div>
                   </div>
                   
-                  <div style={{ fontSize: '0.7em', color: 'var(--muted)', marginBottom: 8 }}>
+                  <div style={{ fontSize: '0.65em', color: 'var(--muted)', marginBottom: 6 }}>
                     {new Date(attempt.createdAt).toLocaleString()}
                   </div>
                   
                   <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-around',
-                    padding: '8px 0',
+                    padding: '6px 0',
                     borderTop: '1px solid var(--border)'
                   }}>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.1em', fontWeight: 600, color: 'var(--accent)' }}>
+                      <div style={{ fontSize: '0.95em', fontWeight: 600, color: 'var(--accent)' }}>
                         {attempt.score}/{attempt.total}
                       </div>
-                      <div style={{ fontSize: '0.7em', color: 'var(--muted)' }}>Score</div>
+                      <div style={{ fontSize: '0.65em', color: 'var(--muted)' }}>Score</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.1em', fontWeight: 600, color: 'var(--accent2)' }}>
+                      <div style={{ fontSize: '0.85em', fontWeight: 600, color: 'var(--accent2)' }}>
                         {attempt.quizType || 'Mixed'}
                       </div>
-                      <div style={{ fontSize: '0.7em', color: 'var(--muted)' }}>Type</div>
+                      <div style={{ fontSize: '0.65em', color: 'var(--muted)' }}>Type</div>
                     </div>
                   </div>
                   
@@ -378,26 +321,26 @@ export default function Dashboard() {
                     }}
                     style={{
                       width: '100%',
-                      padding: '8px 12px',
+                      padding: '6px 10px',
                       background: 'var(--accent)',
                       color: 'white',
                       border: 'none',
                       borderRadius: 8,
                       cursor: 'pointer',
                       fontWeight: 700,
-                      fontSize: '0.8em',
+                      fontSize: '0.7em',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 8,
-                      marginTop: 8,
+                      gap: 6,
+                      marginTop: 6,
                       transition: 'all 0.2s ease'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   >
                     <span>📝</span>
-                    <span>View Full Quiz & Analysis</span>
+                    <span>View Details</span>
                   </button>
                 </div>
               );
@@ -425,15 +368,105 @@ export default function Dashboard() {
         }}>
 
         {/* MIDDLE CONTENT AREA - 73.33% of right panel (55% of total) */}
-        <div style={{ 
+        <div style={{
           flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          padding: '20px',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
-        }}
-        className="hide-scrollbar">
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          {/* Individual PDF Performance Header */}
+          <div style={{
+            padding: '12px 20px',
+            background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.08) 0%, rgba(124, 156, 255, 0.02) 100%)',
+            borderBottom: '2px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <h2 style={{ 
+              margin: 0, 
+              fontSize: '1.1em', 
+              fontWeight: 700, 
+              color: 'var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              letterSpacing: '0.5px'
+            }}>
+              📚 Individual PDF Performance
+            </h2>
+            
+            {/* Refresh Controls */}
+            <div style={{display:'flex', gap:14, alignItems:'center'}}>
+              {lastRefresh && (
+                <div style={{
+                  fontSize: '0.75em',
+                  color: 'var(--muted)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 2
+                }}>
+                  <span style={{ fontWeight: 600 }}>Last refresh</span>
+                  <span>{lastRefresh.toLocaleTimeString()}</span>
+                </div>
+              )}
+              
+              {lastRefresh && (
+                <button 
+                  className="secondary" 
+                  onClick={loadData}
+                  disabled={loading}
+                  title="Refresh all dashboard data"
+                  style={{ 
+                    padding: '8px 14px', 
+                    fontSize: '0.85em', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 6
+                  }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {loading ? 'Refreshing...' : 'Refresh All'}
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Scrollable Content */}
+          <div style={{ 
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '20px',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'var(--accent) rgba(124, 156, 255, 0.1)',
+            paddingBottom: '140px'
+          }}
+          className="stylish-scrollbar">
+          <style>{
+            `.stylish-scrollbar::-webkit-scrollbar {
+              width: 10px;
+            }
+            .stylish-scrollbar::-webkit-scrollbar-track {
+              background: rgba(124, 156, 255, 0.05);
+              border-radius: 10px;
+            }
+            .stylish-scrollbar::-webkit-scrollbar-thumb {
+              background: var(--accent);
+              border-radius: 10px;
+              box-shadow: 0 0 10px rgba(124, 156, 255, 0.8), 0 0 20px rgba(124, 156, 255, 0.4);
+              transition: all 0.3s ease;
+            }
+            .stylish-scrollbar::-webkit-scrollbar-thumb:hover {
+              background: rgba(124, 156, 255, 0.9);
+              box-shadow: 0 0 15px rgba(124, 156, 255, 1), 0 0 30px rgba(124, 156, 255, 0.6);
+            }`
+          }</style>
           {!selectedDoc ? (
             <div style={{textAlign:'center', padding:'100px 40px', color:'var(--muted)'}}>              <div style={{fontSize:'100px', marginBottom:'24px'}}>📊</div>
               <div style={{fontSize:'1.4em', fontWeight:700, marginBottom:'12px'}}>Select a PDF</div>
@@ -570,23 +603,39 @@ export default function Dashboard() {
                   </div>
 
                   {/* Topic Performance */}
-                  <div style={{padding:16, background:'rgba(124, 156, 255, 0.08)', borderRadius:12, border:'2px solid rgba(124, 156, 255, 0.3)'}}>
-                    <div style={{fontWeight:700, color:'var(--accent)', marginBottom:12, fontSize:'1em', display:'flex', alignItems:'center', gap:8}}>
-                      <span>📊</span> Topics
+                  <div style={{padding:16, background:'rgba(124, 156, 255, 0.08)', borderRadius:12, border:'2px solid rgba(124, 156, 255, 0.3)', maxHeight:'400px', overflowY:'auto', scrollbarWidth:'thin', scrollbarColor:'var(--accent) rgba(124, 156, 255, 0.1)'}}>
+                    <div style={{fontWeight:700, color:'var(--accent)', marginBottom:12, fontSize:'1em', display:'flex', alignItems:'center', gap:8, position:'sticky', top:0, }}>
+                      <span>📊</span> Topics ({s.performance?.topicPerformance?.length || 0})
                     </div>
                     {s.performance?.topicPerformance?.length > 0 ? (
                       <div style={{fontSize:'0.8em'}}>
-                        {s.performance.topicPerformance.slice(0, 5).map((topic, i) => (
-                          <div key={i} style={{marginBottom:6, padding:'6px 10px', background:'rgba(124, 156, 255, 0.1)', borderRadius:6, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                            <div style={{fontSize:'0.85em'}}>{topic.name}</div>
-                            <div style={{fontWeight:700, color:getAccuracyColor(topic.accuracy), fontSize:'0.9em'}}>
-                              {(topic.accuracy*100).toFixed(0)}%
+                        {s.performance.topicPerformance.slice(0, 10).map((topic, i) => (
+                          <div key={i} style={{marginBottom:6, padding:'6px 10px', background:'rgba(124, 156, 255, 0.1)', borderRadius:6, display:'flex', justifyContent:'space-between', alignItems:'center', gap:8}}>
+                            <div style={{fontSize:'0.85em', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={topic.name}>
+                              {topic.name}
+                            </div>
+                            <div style={{display:'flex', alignItems:'center', gap:4, flexShrink:0}}>
+                              <div style={{fontSize:'0.7em', color:'var(--muted)'}}>
+                                ({topic.questionsCount}Q)
+                              </div>
+                              <div style={{fontWeight:700, color:getAccuracyColor(topic.accuracy), fontSize:'0.9em'}}>
+                                {(topic.accuracy*100).toFixed(0)}%
+                              </div>
                             </div>
                           </div>
                         ))}
+                        {s.performance.topicPerformance.length > 10 && (
+                          <div style={{fontSize:'0.75em', color:'var(--muted)', textAlign:'center', marginTop:8, fontStyle:'italic'}}>
+                            +{s.performance.topicPerformance.length - 10} more topics
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <div style={{color:'var(--muted)', fontSize:'0.8em', textAlign:'center', padding:'20px 0'}}>No topics</div>
+                      <div style={{color:'var(--muted)', fontSize:'0.8em', textAlign:'center', padding:'20px 0'}}>
+                        <div style={{fontSize:'2em', marginBottom:8}}>📄</div>
+                        <div>No topic data available</div>
+                        <div style={{fontSize:'0.85em', marginTop:4}}>Take quizzes to see topic performance</div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -597,68 +646,82 @@ export default function Dashboard() {
                     <h3 style={{fontSize:'1.2em', fontWeight:700, color:'var(--accent)', marginBottom:16, display:'flex', alignItems:'center', gap:8}}>
                       📋 Attempt History
                     </h3>
-                    <div style={{display:'grid', gap:'14px'}}>
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
                       {s.attempts.map((attempt, index) => (
                         <div key={attempt.id || index} style={{
                           background:'linear-gradient(135deg, rgba(124, 156, 255, 0.12) 0%, rgba(124, 156, 255, 0.05) 100%)', 
                           border:'2px solid rgba(124, 156, 255, 0.4)', 
                           borderRadius:12, 
-                          padding:'18px', 
+                          padding:'12px', 
                           transition:'all 0.3s ease',
-                          boxShadow:'0 2px 12px rgba(124, 156, 255, 0.2)'
-                        }}>
-                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14}}>
+                          boxShadow:'0 2px 12px rgba(124, 156, 255, 0.2)',
+                          cursor:'pointer'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.03)';
+                          e.currentTarget.style.boxShadow = '0 4px 16px rgba(124, 156, 255, 0.4)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.boxShadow = '0 2px 12px rgba(124, 156, 255, 0.2)';
+                        }}
+                        onClick={() => { setSelectedAttempt(attempt); setSelectedDocumentId(selectedDoc); }}>
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
                             <div>
-                              <div style={{fontWeight:700, fontSize:'1.1em', color:'var(--text)'}}>Attempt #{s.attempts.length - index}</div>
-                              <div style={{fontSize:'0.8em', color:'var(--muted)', marginTop:6}}>
+                              <div style={{fontWeight:700, fontSize:'0.85em', color:'var(--text)'}}>Attempt #{s.attempts.length - index}</div>
+                              <div style={{fontSize:'0.65em', color:'var(--muted)', marginTop:4}}>
                                 {new Date(attempt.createdAt).toLocaleString()}
                               </div>
                             </div>
                             <div style={{
                               background: attempt.overallAccuracy >= 0.8 ? '#6ee7b7' : attempt.overallAccuracy >= 0.6 ? '#ffa500' : '#ff7c7c', 
                               color: '#000', 
-                              padding:'8px 16px', 
+                              padding:'2px 6px', 
                               borderRadius:10, 
-                              fontSize:'1.1em', 
-                              fontWeight:900,
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                              fontSize:'0.7em', 
+                              fontWeight:700
                             }}>
                               {Math.round(attempt.overallAccuracy * 100)}%
                             </div>
                           </div>
-                          <div style={{display:'flex', gap:12, marginBottom:12}}>
-                            <div style={{flex:1, textAlign:'center', padding:'12px', background:'rgba(124, 156, 255, 0.15)', borderRadius:8, border:'1px solid rgba(124, 156, 255, 0.3)'}}>
-                              <div style={{fontSize:'1.4em', fontWeight:700, color:'var(--accent)'}}>{attempt.score}/{attempt.total}</div>
-                              <div style={{fontSize:'0.75em', color:'var(--muted)', marginTop:4}}>Score</div>
+                          <div style={{display:'flex', gap:8, marginBottom:6, paddingTop:'6px', borderTop:'1px solid var(--border)'}}>
+                            <div style={{flex:1, textAlign:'center', padding:'6px', background:'rgba(124, 156, 255, 0.15)', borderRadius:6, border:'1px solid rgba(124, 156, 255, 0.3)'}}>
+                              <div style={{fontSize:'0.95em', fontWeight:700, color:'var(--accent)'}}>{attempt.score}/{attempt.total}</div>
+                              <div style={{fontSize:'0.65em', color:'var(--muted)', marginTop:2}}>Score</div>
                             </div>
-                            <div style={{flex:1, textAlign:'center', padding:'12px', background:'rgba(124, 156, 255, 0.15)', borderRadius:8, border:'1px solid rgba(124, 156, 255, 0.3)'}}>
-                              <div style={{fontSize:'1.1em', fontWeight:700, color:'var(--accent2)'}}>{attempt.quizType || 'Mixed'}</div>
-                              <div style={{fontSize:'0.75em', color:'var(--muted)', marginTop:4}}>Type</div>
+                            <div style={{flex:1, textAlign:'center', padding:'6px', background:'rgba(124, 156, 255, 0.15)', borderRadius:6, border:'1px solid rgba(124, 156, 255, 0.3)'}}>
+                              <div style={{fontSize:'0.85em', fontWeight:700, color:'var(--accent2)'}}>{attempt.quizType || 'Mixed'}</div>
+                              <div style={{fontSize:'0.65em', color:'var(--muted)', marginTop:2}}>Type</div>
                             </div>
                           </div>
                           <button
-                            onClick={() => { setSelectedAttempt(attempt); setSelectedDocumentId(selectedDoc); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAttempt(attempt);
+                              setSelectedDocumentId(selectedDoc);
+                            }}
                             style={{
                               width: '100%',
-                              padding: '10px 16px',
+                              padding: '6px 10px',
                               background: 'var(--accent)',
                               color: 'white',
                               border: 'none',
                               borderRadius: 8,
                               cursor: 'pointer',
                               fontWeight: 700,
-                              fontSize: '0.9em',
+                              fontSize: '0.7em',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: 8,
+                              gap: 6,
+                              marginTop:6,
                               transition: 'all 0.2s ease'
                             }}
                             onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)' }
                           >
                             <span>📝</span>
-                            <span>View Full Quiz & Analysis</span>
+                            <span>View Details</span>
                           </button>
                         </div>
                       ))}
@@ -668,6 +731,7 @@ export default function Dashboard() {
               </div>
             );
           })()}
+          </div>
         </div>
 
         {/* RIGHT SIDEBAR - PDF TILES - 26.67% of right panel (20% of total) */}
@@ -679,8 +743,30 @@ export default function Dashboard() {
           background: 'linear-gradient(180deg, rgba(124, 156, 255, 0.05) 0%, var(--panel) 100%)',
           overflow: 'hidden'
         }}>
-          {/* Sticky Header */}
+          {/* Search Header - Fixed at top */}
           <div style={{
+            padding: '12px 14px',
+            borderBottom: '2px solid var(--border)',
+            background: 'rgba(124, 156, 255, 0.08)'
+          }}>
+            <input 
+              type="text"
+              placeholder="Search PDFs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding:'8px 12px',
+                background:'var(--input-bg)',
+                border:'1px solid var(--border)',
+                borderRadius:8,
+                color:'var(--text)',
+                fontSize:'0.9em'
+              }}
+            />
+          </div>
+          {/* Sticky Header */}
+          {/* <div style={{
             position: 'sticky',
             top: 0,
             zIndex: 10,
@@ -697,7 +783,7 @@ export default function Dashboard() {
                 {searchQuery ? `${filteredSummary.length} of ${data.summary.length}` : `${data.summary.length} PDF${data.summary.length !== 1 ? 's' : ''}`}
               </div>
             )}
-          </div>
+          </div> */}
           
           {/* Scrollable Content */}
           <div style={{
@@ -705,9 +791,10 @@ export default function Dashboard() {
             overflowY: 'auto',
             overflowX: 'hidden',
             padding: '16px 14px',
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'var(--accent) rgba(124, 156, 255, 0.1)'
-          }}>
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }}
+          className="hide-scrollbar">
             {!loading && !error && (!data?.summary || data.summary.length === 0) && (
               <div style={{textAlign:'center', padding:'40px 20px', color:'var(--muted)'}}>                <div style={{fontSize:'3em', marginBottom:'16px'}}>📄</div>
                 <div style={{fontSize:'0.85em', lineHeight:1.6}}>No PDFs yet</div>
@@ -735,8 +822,27 @@ export default function Dashboard() {
                   transition:'all 0.2s ease',
                   boxShadow: selectedDoc === s.documentId ? '0 4px 16px rgba(124, 156, 255, 0.4)' : '0 2px 4px rgba(0,0,0,0.1)'
                 }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(124, 156, 255, 0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = selectedDoc === s.documentId ? '0 4px 16px rgba(124, 156, 255, 0.4)' : '0 2px 4px rgba(0,0,0,0.1)';
+                }}
               >
-                <div style={{fontSize:'0.85em', fontWeight:700, marginBottom:12, color:'var(--text)', textAlign:'center', lineHeight:1.3}}>
+                <div style={{
+                  fontSize:'0.85em', 
+                  fontWeight:700, 
+                  marginBottom:12, 
+                  color:'var(--text)', 
+                  textAlign:'center', 
+                  lineHeight:1.3,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  padding: '0 4px'
+                }}>
                   {s.title}
                 </div>
                 

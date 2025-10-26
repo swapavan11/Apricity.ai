@@ -37,7 +37,7 @@ export const config = {
   SESSION_SECRET: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this-in-production',
   
   // File upload
-  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB
+  MAX_FILE_SIZE: 25 * 1024 * 1024, // 25MB
   ALLOWED_FILE_TYPES: ['application/pdf'],
   
   // Rate limiting
