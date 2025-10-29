@@ -346,7 +346,7 @@ const LoginForm = ({ onSwitchToRegister, onSuccess }) => {
               borderRadius: '50%',
               animation: 'spin 1s linear infinite'
             }} />
-            <div style={{ color: 'var(--muted)' }}>Redirecting to Google…</div>
+            <div style={{ color: 'var(--muted)' }}>Authenticating with Google…</div>
           </div>
         </div>
       )}
