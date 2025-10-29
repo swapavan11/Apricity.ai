@@ -511,7 +511,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
             }
           `}</style>
           <div style={{ marginBottom: "20px" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "8px", color: "var(--accent)" }}>Quiz Generator</h3>
+            <h2 style={{ marginTop: 0, marginBottom: "8px", color: "var(--accent)" }}>Quiz Generator</h2>
             <p style={{ color: "var(--muted)", marginBottom: "16px" }}>
               Generate customized quizzes based on your PDF content. Choose question types and counts.
             </p>
@@ -550,7 +550,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
             
             {/* Info message for custom mode when no PDF */}
             {quizMode === "custom" && (!selected || selected === 'all') && (
-              <div style={{ textAlign: 'center', padding: 12, background: 'rgba(124, 156, 255, 0.1)', borderRadius: 8, fontSize: '0.9em', color: 'var(--muted)' }}>
+              <div style={{ textAlign: 'center', padding: 8, background: 'rgba(124, 156, 255, 0.1)', borderRadius: 8, fontSize: '0.9em', color: 'var(--muted)' , margin:'12px auto', width:'80%' ,  display:'flex', alignItems:'center',justifyContent:'center'}}>
                 ℹ️ General quiz mode - No PDF context will be used. Please provide detailed instructions below.
               </div>
             )}
@@ -749,9 +749,9 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                     width: "80%",
                     padding: "10px 12px",
                     borderRadius: 8,
-                    background: "#0f1530",
+                    background: "#050b29ff",
                     color: "var(--text)",
-                    border: "1px solid #1f2b57",
+                    border: "2px solid var(--accent)",
                     resize: "vertical",
                   }}
                 />
@@ -764,7 +764,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
             marginBottom: 20,
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 24,
+            gap: 46,
             justifyContent: 'center',
             alignItems: 'stretch',
           }}>

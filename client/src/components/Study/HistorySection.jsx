@@ -25,9 +25,11 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
     }}>
       {/* Header Ribbon */}
       <div style={{ 
-        padding: '18px 28px', 
+        padding: '10px 28px', 
+        paddingRight: '14px',
         background: 'linear-gradient(135deg, rgba(124, 156, 255, 0.12) 0%, rgba(124, 156, 255, 0.04) 100%)',
-        borderBottom: '2px solid var(--accent)',
+        borderRadius: '24px 24px 24px 24px',
+        border: '2px solid var(--accent)',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
       }}>
         {!selected ? (
@@ -58,9 +60,9 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
               <span style={{ fontSize: '1.2em' }}>📚</span>
               <span>{attemptHistory?.title || 'Loading...'}</span>
               <span style={{
-                fontSize: '0.75em',
+                fontSize: '0.9em',
                 fontWeight: 600,
-                color: 'var(--muted)',
+                color: 'var(--accent)',
                 marginLeft: 8
               }}>
                 • Quiz Performance
@@ -68,11 +70,11 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
             </div>
             {attemptHistory?.attempts?.length > 0 && (
               <div style={{ 
-                padding: '8px 16px',
+                padding: '6px 12px',
                 background: 'rgba(124, 156, 255, 0.2)',
-                borderRadius: 20,
+                borderRadius: 16,
                 border: '2px solid var(--accent)',
-                fontSize: '0.9em',
+                fontSize: '1.05em',
                 fontWeight: 700,
                 color: 'var(--accent)'
               }}>
@@ -136,17 +138,20 @@ export default function HistorySection({ selected, attemptHistory, loadingAttemp
                   borderRadius: 12,
                   padding: '18px',
                   cursor: 'pointer',
-                  transition: 'all 0.3s ease',
+                  transition: 'all 0.4s ease',
                   boxShadow: '0 2px 8px rgba(124, 156, 255, 0.2)'
                 }}
                 onClick={() => setSelectedAttempt(a)}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-4px)';
                   e.currentTarget.style.boxShadow = '0 4px 16px rgba(124, 156, 255, 0.4)';
+                  e.currentTarget.style.border = '2px solid var(--accent)'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
                   e.currentTarget.style.boxShadow = '0 2px 8px rgba(124, 156, 255, 0.2)';
+                  e.currentTarget.style.border = '2px solid rgba(124, 156, 255, 0.3)'
+                  ;
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
