@@ -39,6 +39,9 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [quizStartTime, setQuizStartTime] = useState(null);
   const timerRef = useRef(null);
+
+  // Difficulty state
+  const [difficulty, setDifficulty] = useState("medium"); // easy | medium | hard
   
   // Modal states
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
@@ -73,7 +76,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
     if (pendingRetake && pendingRetake.quizParams) {
       console.log('Applying retake params:', pendingRetake);
       const params = pendingRetake.quizParams;
-      
+
       // Set quiz parameters
       setQuizMode(params.mode || 'auto');
       setQuizCount(params.mcqCount || 0);
@@ -82,15 +85,17 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
       setLaqCount(params.laqCount || 0);
       setSelectedTopics(params.topics || []);
       setQuizPrompt(params.instructions || '');
-      
+      setDifficulty(params.difficulty || 'medium');
+
       console.log('Set counts:', {
         mcq: params.mcqCount,
         oneword: params.onewordCount,
         saq: params.saqCount,
         laq: params.laqCount,
-        mode: params.mode
+        mode: params.mode,
+        difficulty: params.difficulty
       });
-      
+
       // Set timer if specified
       if (pendingRetake.withTimer) {
         setIsTimedQuiz(true);
@@ -100,19 +105,19 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
         setIsTimedQuiz(false);
         console.log('Timer disabled');
       }
-      
+
       // Clear existing quiz first
       setQuiz(null);
       setScore(null);
       setAnswers({});
       setSubmittedAnswers(null);
-      
+
       // Trigger quiz generation after states are set
       setTimeout(() => {
         console.log('Triggering quiz generation...');
         setShouldGenerateQuiz(true);
       }, 300);
-      
+
       // Clear pending after applying
       setPendingRetake(null);
     }
@@ -390,7 +395,8 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
         laqCountVal,
         combinedInstructions,
         '',
-        topicsToUse
+        topicsToUse,
+        difficulty
       );
 
       // If no questions generated, show error and log raw output
@@ -451,7 +457,8 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
         laqCount: quiz.questions.filter(q => q.type === 'LAQ').length,
         mode: quizMode,
         topics: quizMode === 'select' ? selectedTopics : [],
-        instructions: quizMode === 'custom' ? quizPrompt : ''
+        instructions: quizMode === 'custom' ? quizPrompt : '',
+        difficulty
       };
       
       const payload = {
@@ -752,37 +759,185 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
             )}
           </div>
 
-          {/* Timer toggle */}
-          <div style={{ marginBottom: 20, textAlign: 'center', padding: '16px', background: 'rgba(124, 156, 255, 0.05)', borderRadius: 8, border: '1px solid var(--border)' }}>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input 
-                type="checkbox" 
-                checked={isTimedQuiz}
-                onChange={(e) => setIsTimedQuiz(e.target.checked)}
-                style={{ width: 18, height: 18, cursor: 'pointer' }}
-              />
-              <span style={{ fontWeight: 600, fontSize: '1.05em' }}>⏱️ Timed Quiz</span>
-            </label>
-            
-            {isTimedQuiz && (
-              <div style={{ marginTop: 12 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-                  <span style={{ fontSize: '0.95em', color: 'var(--muted)' }}>Time Limit:</span>
-                  <input 
-                    type="number"
-                    min={1}
-                    max={180}
-                    value={timeLimit}
-                    onChange={(e) => setTimeLimit(Math.max(1, Math.min(180, Number(e.target.value) || 30)))}
-                    style={{ width: 70, textAlign: 'center', padding: '6px', borderRadius: 6, background: 'var(--input-bg)', color: 'var(--text)', border: '1px solid var(--border)' }}
-                  />
-                  <span style={{ fontSize: '0.95em', color: 'var(--muted)' }}>minutes</span>
-                </label>
-                <div style={{ fontSize: '0.8em', color: 'var(--muted)', marginTop: 6, fontStyle: 'italic' }}>
-                  Quiz will auto-submit when time expires
+          {/* Timer and Difficulty selector tile */}
+          <div style={{
+            marginBottom: 20,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 24,
+            justifyContent: 'center',
+            alignItems: 'stretch',
+          }}>
+            {/* Timer Card */}
+            <div style={{
+              flex: '1 1 260px',
+              minWidth: 240,
+              maxWidth: 340,
+              background: 'rgba(124, 156, 255, 0.07)',
+              borderRadius: 12,
+              border: '1.5px solid var(--border)',
+              padding: 20,
+              boxShadow: '0 2px 12px rgba(124,156,255,0.07)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
+                <input 
+                  type="checkbox" 
+                  checked={isTimedQuiz}
+                  onChange={(e) => setIsTimedQuiz(e.target.checked)}
+                  style={{ width: 20, height: 20, cursor: 'pointer', accentColor: 'var(--accent)' }}
+                />
+                <span style={{ fontWeight: 700, fontSize: '1.1em', color: 'var(--accent2)' }}>⏱️ Timed Quiz</span>
+              </label>
+              {isTimedQuiz && (
+                <div style={{ marginTop: 10, width: '100%' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', width: '100%' }}>
+                    <span style={{ fontSize: '0.97em', color: 'var(--muted)' }}>Time Limit:</span>
+                    <button
+                      type="button"
+                      aria-label="Decrease time"
+                      onClick={() => setTimeLimit(t => Math.max(1, t - 1))}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: 'var(--accent)',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: 20,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 1px 4px rgba(124,156,255,0.10)',
+                        transition: 'background 0.2s',
+                      }}
+                    >
+                      -
+                    </button>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={timeLimit}
+                      onChange={e => {
+                        const v = Number(e.target.value.replace(/[^0-9]/g, ''));
+                        setTimeLimit(Math.max(1, Math.min(180, v || 1)));
+                      }}
+                      style={{
+                        width: 48,
+                        textAlign: 'center',
+                        padding: '6px',
+                        borderRadius: 6,
+                        background: 'var(--input-bg)',
+                        color: 'var(--text)',
+                        border: '1px solid var(--border)',
+                        fontWeight: 600,
+                        fontSize: '1.1em',
+                        MozAppearance: 'textfield',
+                        appearance: 'textfield',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Increase time"
+                      onClick={() => setTimeLimit(t => Math.min(180, t + 1))}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: 'var(--accent)',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: 20,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 1px 4px rgba(124,156,255,0.10)',
+                        transition: 'background 0.2s',
+                      }}
+                    >
+                      +
+                    </button>
+                    <span style={{ fontSize: '0.97em', color: 'var(--muted)' }}>minutes</span>
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 10 }}>
+                    {[10, 15, 30, 45, 60, 90, 120, 180].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setTimeLimit(val)}
+                        style={{
+                          padding: '4px 14px',
+                          borderRadius: 16,
+                          border: timeLimit === val ? '2px solid var(--accent)' : '1.5px solid var(--border)',
+                          background: timeLimit === val ? 'var(--accent)' : 'var(--input-bg)',
+                          color: timeLimit === val ? 'white' : 'var(--text)',
+                          fontWeight: 600,
+                          fontSize: '0.98em',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          marginBottom: 2,
+                        }}
+                      >
+                        {val} min
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '0.82em', color: 'var(--muted)', marginTop: 6, fontStyle: 'italic', textAlign: 'center' }}>
+                    Quiz will auto-submit when time expires
+                  </div>
                 </div>
+              )}
+            </div>
+            {/* Difficulty Card */}
+            <div style={{
+              flex: '1 1 260px',
+              minWidth: 240,
+              maxWidth: 340,
+              background: 'rgba(124, 156, 255, 0.07)',
+              borderRadius: 12,
+              border: '1.5px solid var(--border)',
+              padding: 20,
+              boxShadow: '0 2px 12px rgba(124,156,255,0.07)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <label style={{ fontWeight: 700, fontSize: '1.1em', color: 'var(--accent2)', marginBottom: 10 }}>🎯 Difficulty</label>
+              <select
+                value={difficulty}
+                onChange={e => setDifficulty(e.target.value)}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: 8,
+                  background: 'var(--input-bg)',
+                  color: 'var(--text)',
+                  border: '1.5px solid var(--border)',
+                  fontSize: '1.08em',
+                  fontWeight: 600,
+                  outline: 'none',
+                  boxShadow: '0 1px 4px rgba(124,156,255,0.08)',
+                  marginBottom: 6,
+                  cursor: 'pointer',
+                  transition: 'border 0.2s, box-shadow 0.2s',
+                }}
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+              <div style={{ fontSize: '0.88em', color: 'var(--muted)', marginTop: 4, textAlign: 'center' }}>
+                Choose how challenging you want your quiz
               </div>
-            )}
+            </div>
           </div>
 
           {/* Question counts grid */}
@@ -820,6 +975,20 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
               </div>
             ))}
           </div>
+
+          {/* Difficulty selector */}
+          {/* <div style={{ marginBottom: 20, textAlign: 'center', padding: '16px', background: 'rgba(124, 156, 255, 0.05)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <label style={{ fontWeight: 600, fontSize: '1.05em', marginRight: 12 }}>Difficulty:</label>
+            <select
+              value={difficulty}
+              onChange={e => setDifficulty(e.target.value)}
+              style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--input-bg)', color: 'var(--text)', border: '1px solid var(--border)', fontSize: '1em' }}
+            >
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div> */}
 
           {/* Generate and Clear buttons */}
           <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginBottom: "20px" }}>
@@ -971,7 +1140,45 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                   <span>{Math.floor(timeRemaining / 60000)}:{String(Math.floor((timeRemaining % 60000) / 1000)).padStart(2, '0')}</span>
                 </div>
               )}
-              
+
+              {/* Clear Quiz Button (moved left) */}
+              <button
+                type="button"
+                onClick={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setQuiz(null);
+                  setScore(null);
+                  setAnswers({});
+                  setSubmittedAnswers(null);
+                  setIsTimedQuiz(false);
+                  setTimeRemaining(null);
+                  setQuizStartTime(null);
+                  if (selected) {
+                    sessionStorage.removeItem(`activeQuiz_${selected}`);
+                  }
+                  setToast({ message: 'Quiz cleared! Ready to generate a new quiz.', type: 'success' });
+                }}
+                style={{
+                  padding: "8px 16px",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+                }}
+              >
+                <span>🗑️</span>
+                <span>Clear Quiz</span>
+              </button>
+
+              {/* New Quiz Button */}
               <button
                 className="secondary"
                 onClick={() => {

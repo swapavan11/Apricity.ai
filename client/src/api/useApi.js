@@ -116,8 +116,8 @@ export default function useApi() {
     },
 
     // Quiz APIs
-    genQuiz: async (documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic, topics) => {
-      console.log('[API] genQuiz called with:', { documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic, topics });
+    genQuiz: async (documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic, topics, difficulty) => {
+      console.log('[API] genQuiz called with:', { documentId, mcqCount, onewordCount, saqCount, laqCount, instructions, topic, topics, difficulty });
       const token = localStorage.getItem('token');
       const headers = { 
         "Content-Type": "application/json",
@@ -135,6 +135,7 @@ export default function useApi() {
           instructions,
           topic,
           topics,
+          difficulty,
         }),
       });
       const result = await res.json();

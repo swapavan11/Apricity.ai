@@ -139,7 +139,7 @@ router.post('/add-topic', authenticateToken, async (req, res) => {
 });
 
 router.post('/generate', authenticateToken, async (req, res) => {
-  const { documentId, mcqCount = 5, onewordCount = 0, saqCount = 0, laqCount = 0, instructions = '', topic = '', topics = [] } = req.body;
+  const { documentId, mcqCount = 5, onewordCount = 0, saqCount = 0, laqCount = 0, instructions = '', topic = '', topics = [], difficulty = 'medium' } = req.body;
   let docs = [];
   let context = '';
   
@@ -185,12 +185,17 @@ router.post('/generate', authenticateToken, async (req, res) => {
   const topicsList = Array.isArray(topics) && topics.length > 0 ? topics : (topic ? [topic] : []);
   const topicsInstruction = topicsList.length > 0 ? `Focus Topics: ${topicsList.join(', ')}\n` : '';
   const instructionBlock = ((sanitizedInstructions ? `User Instructions: ${sanitizedInstructions}\n` : '') + topicsInstruction) || '';
-  const prompt = `Create a quiz with ${mcqCount} MCQs, ${saqCount} SAQs, and ${laqCount} LAQs from the context.${instructionBlock} 
-MCQ: 4 options, answerIndex 0-3. SAQ: short text answer. LAQ: detailed text answer.
-Schema: {"questions":[{"id":"string","type":"MCQ|SAQ|LAQ","question":"string","options":["A","B","C","D"] (MCQ only),"answerIndex":0 (MCQ only),"answer":"string (SAQ/LAQ)","page":number,"explanation":"string"}]}.\nContext:\n${context}`;
-    // Augmented prompt that also mentions ONEWORD questions (single-token answers)
-    const augmentedPrompt = `Create a quiz with ${mcqCount} MCQs, ${onewordCount} ONEWORD questions, ${saqCount} SAQs, and ${laqCount} LAQs from the context.${instructionBlock} \nMCQ: 4 options, answerIndex 0-3. ONEWORD: single token answer (word or numeric). SAQ: short text answer. LAQ: detailed text answer.\nSchema: {"questions":[{"id":"string","type":"MCQ|ONEWORD|SAQ|LAQ","question":"string","options":["A","B","C","D"] (MCQ only),"answerIndex":0 (MCQ only),"answer":"string (ONEWORD/SAQ/LAQ)","page":number,"explanation":"string"}]}.\nContext:\n${context}`;
-    const text = await generateText({ prompt: augmentedPrompt, system });
+  const difficultyInstruction = `Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}.`;
+  const prompt = [
+    `Create a quiz with ${mcqCount} MCQs, ${onewordCount} ONEWORD questions, ${saqCount} SAQs, and ${laqCount} LAQs from the context.`,
+    difficultyInstruction,
+    instructionBlock,
+    'MCQ: 4 options, answerIndex 0-3. ONEWORD: single token answer (word or numeric). SAQ: short text answer. LAQ: detailed text answer.',
+    'Schema: {"questions":[{"id":"string","type":"MCQ|ONEWORD|SAQ|LAQ","question":"string","options":["A","B","C","D"] (MCQ only),"answerIndex":0 (MCQ only),"answer":"string (ONEWORD/SAQ/LAQ)","page":number,"explanation":"string"}]}.' ,
+    'Context:',
+    context
+  ].join('\n');
+  const text = await generateText({ prompt, system });
   const parsed = parseQuizJson(text);
   if (!parsed || !Array.isArray(parsed.questions)) {
     return res.json({ questions: [], raw: text });

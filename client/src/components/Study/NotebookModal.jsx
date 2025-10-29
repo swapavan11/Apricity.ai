@@ -1069,7 +1069,7 @@ export default function NotebookModal({ open, onClose, associatedDocId, initialT
                 gap: 6,
                 color: 'var(--text)'
               }}>
-                � My Notes
+                📝 My Notes
               </span>
               <button 
                 className="secondary" 
