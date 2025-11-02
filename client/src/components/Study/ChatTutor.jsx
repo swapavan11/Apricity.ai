@@ -25,6 +25,7 @@ export default function ChatTutor({
   loadingAsk,
   setLoadingAsk,
   setYt,
+  setActiveTab,
 }) {
   // --- Speech Recognition (Mic) ---
   const [isListening, setIsListening] = useState(false);
@@ -107,6 +108,33 @@ export default function ChatTutor({
   const [uploadingImage, setUploadingImage] = useState(false); // Track image upload status
   // Modal image preview state
   const [modalImageUrl, setModalImageUrl] = useState(null);
+  const [analyzingMessageId, setAnalyzingMessageId] = useState(null); // Track which message is being analyzed
+  
+  // Handler for analyzing message and getting YouTube recommendations
+  const handleAnalyzeForYouTube = async (messageText, messageIndex) => {
+    try {
+      setAnalyzingMessageId(messageIndex);
+      
+      // Get YouTube recommendations based on message text
+      const ytRes = await api.youtube(messageText, selected === "all" ? null : selected);
+      setYt(ytRes);
+      
+      // Switch to YouTube tab to show recommendations
+      setActiveTab('youtube');
+      
+    } catch (err) {
+      console.error('YouTube recommendation error:', err);
+      setYt({
+        query: messageText,
+        suggestions: [],
+        error: "Failed to load YouTube recommendations.",
+      });
+      // Still switch to YouTube tab to show error
+      setActiveTab('youtube');
+    } finally {
+      setAnalyzingMessageId(null);
+    }
+  };
   
   // Get current chat's versions
   const messageVersions = allChatVersions[activeChatId] || {};
@@ -1438,6 +1466,42 @@ export default function ChatTutor({
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
+                  <button
+                    onClick={() => handleAnalyzeForYouTube(m.text, idx)}
+                    disabled={analyzingMessageId === idx}
+                    style={{
+                      background: analyzingMessageId === idx ? "rgba(124, 156, 255, 0.2)" : "transparent",
+                      border: "none",
+                      color: analyzingMessageId === idx ? "var(--accent)" : "var(--muted)",
+                      cursor: analyzingMessageId === idx ? "wait" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "4px",
+                      borderRadius: "4px",
+                      transition: "all 0.2s",
+                      width: "24px",
+                      height: "24px",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (analyzingMessageId !== idx) {
+                        e.currentTarget.style.background = "var(--surface)";
+                        e.currentTarget.style.color = "var(--text)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (analyzingMessageId !== idx) {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.color = "var(--muted)";
+                      }
+                    }}
+                    title="Analyze for YouTube recommendations"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+                      <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="currentColor"></polygon>
+                    </svg>
+                  </button>
                   {messageVersions[idx] && messageVersions[idx].length > 0 && (
                     <>
                       {/* Previous version button */}
@@ -1529,56 +1593,59 @@ export default function ChatTutor({
                       display: "flex",
                       gap: "8px",
                       alignItems: "center",
+                      justifyContent: "space-between",
                     }}
                   >
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(m.text);
-                        setCopiedMessageId(idx);
-                        setTimeout(() => setCopiedMessageId(null), 2000);
-                      }}
-                      style={{
-                        background: copiedMessageId === idx ? "rgba(34, 197, 94, 0.15)" : "none",
-                        border: "none",
-                        color: copiedMessageId === idx ? "#22c55e" : "var(--muted)",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "6px",
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        transition: "all 0.2s",
-                        width: "28px",
-                        height: "28px",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (copiedMessageId !== idx) {
-                          e.currentTarget.style.background = "rgba(124, 156, 255, 0.1)";
-                          e.currentTarget.style.color = "var(--accent)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (copiedMessageId !== idx) {
-                          e.currentTarget.style.background = "none";
-                          e.currentTarget.style.color = "var(--muted)";
-                        }
-                      }}
-                      title={copiedMessageId === idx ? "Copied!" : "Copy to clipboard"}
-                    >
-                      {copiedMessageId === idx ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                      )}
-                    </button>
-                    <button
+                    {/* Left side buttons */}
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(m.text);
+                          setCopiedMessageId(idx);
+                          setTimeout(() => setCopiedMessageId(null), 2000);
+                        }}
+                        style={{
+                          background: copiedMessageId === idx ? "rgba(34, 197, 94, 0.15)" : "none",
+                          border: "none",
+                          color: copiedMessageId === idx ? "#22c55e" : "var(--muted)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "6px",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          transition: "all 0.2s",
+                          width: "28px",
+                          height: "28px",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (copiedMessageId !== idx) {
+                            e.currentTarget.style.background = "rgba(124, 156, 255, 0.1)";
+                            e.currentTarget.style.color = "var(--accent)";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (copiedMessageId !== idx) {
+                            e.currentTarget.style.background = "none";
+                            e.currentTarget.style.color = "var(--muted)";
+                          }
+                        }}
+                        title={copiedMessageId === idx ? "Copied!" : "Copy to clipboard"}
+                      >
+                        {copiedMessageId === idx ? (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                        )}
+                      </button>
+                      <button
                       onClick={() => {
                         if (speakingMessageId === idx) {
                           // Stop speaking this message
@@ -1735,6 +1802,53 @@ export default function ChatTutor({
                           Read aloud
                         </>
                       )}
+                    </button>
+                    </div>
+                    
+                    {/* Right side - YouTube analyze button */}
+                    <button
+                      onClick={() => handleAnalyzeForYouTube(m.text, idx)}
+                      disabled={analyzingMessageId === idx}
+                      style={{
+                        background: analyzingMessageId === idx 
+                          ? "linear-gradient(135deg, rgba(124, 156, 255, 0.25) 0%, rgba(90, 123, 216, 0.2) 100%)" 
+                          : "linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(90, 123, 216, 0.1) 100%)",
+                        border: "1px solid rgba(124, 156, 255, 0.3)",
+                        color: analyzingMessageId === idx ? "var(--accent)" : "#7c9cff",
+                        cursor: analyzingMessageId === idx ? "wait" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        transition: "all 0.2s ease",
+                        whiteSpace: "nowrap",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (analyzingMessageId !== idx) {
+                          e.currentTarget.style.background = "linear-gradient(135deg, rgba(124, 156, 255, 0.3) 0%, rgba(90, 123, 216, 0.25) 100%)";
+                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.5)";
+                          e.currentTarget.style.color = "#ffffff";
+                          e.currentTarget.style.transform = "translateY(-1px)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (analyzingMessageId !== idx) {
+                          e.currentTarget.style.background = "linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(90, 123, 216, 0.1) 100%)";
+                          e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.3)";
+                          e.currentTarget.style.color = "#7c9cff";
+                          e.currentTarget.style.transform = "translateY(0)";
+                        }
+                      }}
+                      title="Analyze message content and get YouTube video recommendations"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+                        <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="currentColor"></polygon>
+                      </svg>
+                      {analyzingMessageId === idx ? "Analyzing..." : "Analyse & recommend YT video"}
                     </button>
                   </div>
                 )}

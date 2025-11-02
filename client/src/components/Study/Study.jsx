@@ -158,6 +158,7 @@ export default function Study({ selected, docs }) {
     loadingAsk,
     setLoadingAsk,
     setYt,
+    setActiveTab,
     onPdfPageClick: handlePdfPageClick,
   };
 
@@ -196,48 +197,111 @@ export default function Study({ selected, docs }) {
           overflow: "hidden"
         }}
       >
-        <div style={{ padding: 16, flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Top actions */}
-          <div className="row" style={{ gap: 8, marginBottom: 16, flexShrink: 0, justifyContent: "space-between" }}>
-            <div className="row" style={{ gap: 8 }}>
-              <button className={activeTab === 'chat' ? '' : 'secondary'} onClick={() => setActiveTab('chat')}>Chat Tutor</button>
-              <button className={activeTab === 'quiz' ? '' : 'secondary'} onClick={() => setActiveTab('quiz')}>Quiz</button>
-              <button className={activeTab === 'youtube' ? '' : 'secondary'} onClick={() => setActiveTab('youtube')}>YouTube</button>
-              <button className={activeTab === 'history' ? '' : 'secondary'} onClick={() => setActiveTab('history')}>Attempt History</button>
-              <button className="secondary" onClick={() => setNotebookOpen(true)} title="Open Notebook" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                📝 Notebook
-              </button>
-            </div>
-
-            <div className="row" style={{ gap: 8 }}>
-              <button
-                className="secondary"
-                onClick={createNewChat}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px' }}
-                title="Start New Chat"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span>New Chat</span>
-              </button>
-
-              <button
-                className="secondary"
-                onClick={() => setChatHistoryVisible(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px' }}
-                title="View Chat History"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span>Chat History</span>
-              </button>
-            </div>
+        {/* Chrome-style tabs header */}
+        <div style={{
+          background: "#0a0f24",
+          borderBottom: "1px solid #1f2b57",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          padding: "0 12px",
+          paddingTop: "8px",
+          flexShrink: 0
+        }}>
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: "4px" }}>
+            {[
+              { id: 'chat', label: '💬 Chat Tutor', icon: '💬' },
+              { id: 'quiz', label: '📝 Quiz', icon: '📝' },
+              { id: 'youtube', label: '📺 YouTube', icon: '📺' },
+              { id: 'history', label: '📊 History', icon: '📊' }
+            ].map((tab, index) => (
+              <div key={tab.id} style={{ position: 'relative', display: 'flex' }}>
+                
+                
+                <button
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    background: activeTab === tab.id ? 'var(--panel)' : 'transparent',
+                    border: activeTab === tab.id ? '1px solid rgba(124, 156, 255, 0.3)' : '1px solid transparent',
+                    borderBottom: 'none',
+                    borderRadius: '8px 8px 0 0',
+                    padding: '10px 20px',
+                    color: activeTab === tab.id ? 'var(--text)' : 'var(--muted)',
+                    fontSize: '14px',
+                    fontWeight: activeTab === tab.id ? 600 : 400,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                    marginBottom: '-1px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: activeTab === tab.id 
+                      ? '0 -2px 8px rgba(124, 156, 255, 0.4), 0 0 12px rgba(124, 156, 255, 0.2), inset 0 1px 0 rgba(124, 156, 255, 0.2)'
+                      : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== tab.id) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = 'var(--text)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== tab.id) {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--muted)';
+                    }
+                  }}
+                >
+                  <span>{tab.icon}</span>
+                  <span>{tab.label.replace(tab.icon + ' ', '')}</span>
+                </button>
+              </div>
+            ))}
           </div>
+
+          {/* Right actions */}
+          <div style={{ display: "flex", gap: "8px", paddingBottom: "8px" }}>
+            <button
+              className="secondary"
+              onClick={() => setNotebookOpen(true)}
+              title="Open Notebook"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '13px' }}
+            >
+              <span>📝</span>
+              <span>Notebook</span>
+            </button>
+
+            <button
+              className="secondary"
+              onClick={createNewChat}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '13px' }}
+              title="Start New Chat"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span>New Chat</span>
+            </button>
+
+            <button
+              className="secondary"
+              onClick={() => setChatHistoryVisible(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '13px' }}
+              title="View Chat History"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span>History</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Content area with more space */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px" }}>
 
           {/* Tab content */}
           {activeTab === 'chat' && (
@@ -266,7 +330,7 @@ export default function Study({ selected, docs }) {
           )}
 
           {activeTab === 'youtube' && (
-            <YouTubeSection yt={yt} loadingYt={loadingYt} question={question} refreshYouTubeRecommendations={refreshYouTubeRecommendations} />
+            <YouTubeSection yt={yt} loadingYt={loadingYt} question={question} refreshYouTubeRecommendations={refreshYouTubeRecommendations} selected={selected} docs={docs} chats={chats} activeChatId={activeChatId} />
           )}
 
           {activeTab === 'history' && (

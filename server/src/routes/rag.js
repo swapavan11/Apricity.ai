@@ -140,13 +140,13 @@ function lexicalScore(a, b) {
   return Math.max(wordScore, substringScore);
 }
 
-// Ask endpoint: require authentication to use user-owned documents and persist chats
-router.post('/ask', authenticateToken, async (req, res) => {
+// Ask endpoint: support both authenticated and guest users
+router.post('/ask', optionalAuth, async (req, res) => {
   try {
   const { query, documentId, allowGeneral = true, chatId, createIfMissing, images = [], inDepthMode = false } = req.body;
     if (!query) return res.status(400).json({ error: 'query required' });
     
-    console.log('Ask request:', { query: query.slice(0, 50), documentId, chatId, hasImages: images.length > 0, userId: req.user._id });
+    console.log('Ask request:', { query: query.slice(0, 50), documentId, chatId, hasImages: images.length > 0, userId: req.user?._id || 'guest' });
   
   // If documentId is explicitly null or "all", use general knowledge (no PDF)
   if (!documentId || documentId === 'all') {
@@ -155,11 +155,11 @@ router.post('/ask', authenticateToken, async (req, res) => {
       ? `You are Gini, an AI tutor from Apricity.ai created by Swapnil Sontakke. Your role is to help students learn deeply and thoroughly.\n\nKey guidelines:\n- Provide **very detailed, comprehensive answers** (4-8 paragraphs or more if needed)\n- Include step-by-step explanations, relevant examples, and deeper context\n- Break down complex concepts into simple parts, and elaborate on each\n- Use analogies, diagrams (describe them), and real-world applications when possible\n- Be conversational and natural, but focus on depth and clarity\n- Only mention your identity if directly asked\n- Remember the conversation context and refer back to previous messages when relevant\n\nAlways be friendly, encouraging, and patient.`
   : `You are Gini, an AI tutor from Apricity.ai created by Swapnil Sontakke. Your role is to help students learn effectively.\n\nKey guidelines:\n- Provide **medium-length answers** (2–4 paragraphs; do NOT give just a short summary or 1–2 sentences)\n- Be clear and direct - get to the point quickly\n- Use simple language with relevant examples when needed\n- Break down complex concepts into understandable parts\n- Be conversational and natural - avoid robotic or repetitive introductions\n- Only mention your identity if directly asked "who are you" or "what are you" and when you get greeting\n- Focus on answering the question directly rather than introducing yourself\n- Remember the conversation context and refer back to previous messages when relevant\n\nAlways be friendly, encouraging, and patient.`;
 
-    // Build context from chat history if available
+    // Build context from chat history if available (only for authenticated users)
     let contextPrompt = '';
-    if (chatId) {
+    if (req.user && chatId) {
       const existingChat = await Chat.findById(chatId);
-      if (existingChat && existingChat.messages && existingChat.messages.length > 0) {
+      if (existingChat && existingChat.userId.toString() === req.user._id.toString() && existingChat.messages && existingChat.messages.length > 0) {
         const recentMessages = existingChat.messages.slice(-16); // Last 16 messages (8 exchanges)
         contextPrompt = '\n\nPrevious conversation:\n' + recentMessages.map(m => 
           `${m.role === 'user' ? 'Student' : 'You'}: ${m.text.slice(0, 200)}`
@@ -174,36 +174,39 @@ router.post('/ask', authenticateToken, async (req, res) => {
       ? await generateTextWithImages({ prompt, system, imageUrls: images, temperature: 0.7 })
       : await generateText({ prompt, system, temperature: 0.7 });
 
-    // Persist to chat history if chatId provided
+    // Persist to chat history if chatId provided (only for authenticated users)
     let chat = null;
-    if (chatId) {
-      chat = await Chat.findById(chatId);
-      if (chat && chat.userId.toString() === req.user._id.toString()) {
-        chat.messages.push({ role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() });
-        chat.messages.push({ role: 'assistant', text: answer, citations: [], createdAt: new Date() });
-        await chat.save();
+    if (req.user) {
+      if (chatId) {
+        chat = await Chat.findById(chatId);
+        if (chat && chat.userId.toString() === req.user._id.toString()) {
+          chat.messages.push({ role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() });
+          chat.messages.push({ role: 'assistant', text: answer, citations: [], createdAt: new Date() });
+          await chat.save();
+        }
+      } else if (createIfMissing) {
+        chat = await Chat.create({ 
+          documentId: null, 
+          title: 'General Chat', 
+          messages: [
+            { role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() },
+            { role: 'assistant', text: answer, citations: [], createdAt: new Date() }
+          ],
+          userId: req.user._id 
+        });
       }
-    } else if (createIfMissing) {
-      chat = await Chat.create({ 
-        documentId: null, 
-        title: 'General Chat', 
-        messages: [
-          { role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() },
-          { role: 'assistant', text: answer, citations: [], createdAt: new Date() }
-        ],
-        userId: req.user._id 
-      });
     }
 
-    return res.json({ answer, citations: [], usedGeneral: true, chatId: chat?._id || chatId || null });
+    return res.json({ answer, citations: [], usedGeneral: true, chatId: chat?._id || chatId || null, isGuest: !req.user });
   }
   
-  // Only search documents belonging to the requesting user
+  // Only search documents belonging to the requesting user (or allow public access for guest users if no uploadedBy)
   let docs = [];
   if (documentId) {
     const d = await Document.findById(documentId);
     if (!d) return res.json({ answer: "No documents found. Please upload a PDF first.", citations: [], usedGeneral: true });
-    if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) {
+    // Only check ownership if user is authenticated and document has an owner
+    if (req.user && d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: 'Access denied to document' });
     }
     docs = [d];
@@ -365,38 +368,40 @@ router.post('/ask', authenticateToken, async (req, res) => {
   answer = await generateText({ prompt, system, temperature: 0.7 });
   const citations = top.map(t => ({ documentId: t.d._id, title: t.d.title, page: t.c.page, snippet: (t.c.text || '').slice(0, 200) }));
 
-  // Persist to chat history if chatId provided (or create one if requested)
+  // Persist to chat history if chatId provided (or create one if requested) - only for authenticated users
   let chat = null;
-  if (chatId) {
-    chat = await Chat.findById(chatId);
-    if (!chat) {
-      console.warn(`Chat ${chatId} not found - will return answer without saving to chat`);
-      // Still return the answer, just don't save to chat
-    } else if (chat.userId.toString() !== req.user._id.toString()) {
-      console.error(`Chat ${chatId} access denied for user ${req.user._id}`);
-      chat = null;
-    } else {
-      // Chat found and authorized - save messages
-      chat.messages.push({ role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() });
-      chat.messages.push({ role: 'assistant', text: answer, citations, createdAt: new Date() });
-      await chat.save();
-      console.log(`Messages saved to chat ${chatId}`);
+  if (req.user) {
+    if (chatId) {
+      chat = await Chat.findById(chatId);
+      if (!chat) {
+        console.warn(`Chat ${chatId} not found - will return answer without saving to chat`);
+        // Still return the answer, just don't save to chat
+      } else if (chat.userId.toString() !== req.user._id.toString()) {
+        console.error(`Chat ${chatId} access denied for user ${req.user._id}`);
+        chat = null;
+      } else {
+        // Chat found and authorized - save messages
+        chat.messages.push({ role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() });
+        chat.messages.push({ role: 'assistant', text: answer, citations, createdAt: new Date() });
+        await chat.save();
+        console.log(`Messages saved to chat ${chatId}`);
+      }
+    } else if (createIfMissing) {
+      const docTitle = docs?.[0]?.title || 'General Chat';
+      chat = await Chat.create({ 
+        documentId: documentId || null, 
+        title: docTitle, 
+        messages: [
+          { role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() },
+          { role: 'assistant', text: answer, citations, createdAt: new Date() }
+        ],
+        userId: req.user._id 
+      });
+      console.log(`New chat created with ID ${chat._id}`);
     }
-  } else if (createIfMissing) {
-    const docTitle = docs?.[0]?.title || 'General Chat';
-    chat = await Chat.create({ 
-      documentId: documentId || null, 
-      title: docTitle, 
-      messages: [
-        { role: 'user', text: query, images: images.length > 0 ? images : undefined, citations: [], createdAt: new Date() },
-        { role: 'assistant', text: answer, citations, createdAt: new Date() }
-      ],
-      userId: req.user._id 
-    });
-    console.log(`New chat created with ID ${chat._id}`);
   }
 
-  res.json({ answer, citations, usedGeneral: avgScore < 0.01 && allowGeneral, chatId: chat?._id || chatId || null });
+  res.json({ answer, citations, usedGeneral: avgScore < 0.01 && allowGeneral, chatId: chat?._id || chatId || null, isGuest: !req.user });
   } catch (error) {
     console.error('Ask endpoint error:', error);
     res.status(500).json({ error: error.message || 'Internal server error', answer: null });

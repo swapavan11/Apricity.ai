@@ -538,6 +538,7 @@ export default function Dashboard() {
             overflowY: 'auto',
             overflowX: 'hidden',
             padding: '20px',
+            paddingTop: '9px',
             scrollbarWidth: 'thin',
             scrollbarColor: 'var(--accent) rgba(124, 156, 255, 0.1)',
             paddingBottom: '140px'
@@ -574,10 +575,10 @@ export default function Dashboard() {
             return (
               <div>
                 {/* Title Section */}
-                <div style={{marginBottom:20, paddingBottom:16, borderBottom:'2px solid var(--accent)'}}>
+                <div style={{marginBottom:20, paddingBottom:12, borderBottom:'2px solid var(--accent)'}}>
                   <div style={{
                     margin:0,
-                    fontSize:'1.6em',
+                    fontSize:'1.4em',
                     fontWeight:700,
                     color:'var(--accent)',
                     display:'flex',

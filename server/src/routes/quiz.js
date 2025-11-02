@@ -30,8 +30,8 @@ function parseJsonArray(text) {
 }
 
 // GET /api/quiz/topics?documentId=<id>
-// Require authentication and ensure document belongs to user
-import { authenticateToken } from '../middleware/auth.js';
+// Support both authenticated and guest users
+import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 
 router.get('/topics', authenticateToken, async (req, res) => {
   const { documentId } = req.query;
@@ -138,7 +138,7 @@ router.post('/add-topic', authenticateToken, async (req, res) => {
   return res.json({ topics: currentTopics, success: true });
 });
 
-router.post('/generate', authenticateToken, async (req, res) => {
+router.post('/generate', optionalAuth, async (req, res) => {
   const { documentId, mcqCount = 5, onewordCount = 0, saqCount = 0, laqCount = 0, instructions = '', topic = '', topics = [], difficulty = 'medium' } = req.body;
   let docs = [];
   let context = '';
@@ -146,7 +146,8 @@ router.post('/generate', authenticateToken, async (req, res) => {
   if (documentId) {
     const d = await Document.findById(documentId);
     if (!d) return res.status(404).json({ error: 'Document not found' });
-    if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
+    // Only check ownership if user is authenticated
+    if (req.user && d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
     docs = [d];
     
     // estimate pages available
@@ -232,7 +233,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
   res.json({ questions: parsed.questions });
 });
 
-router.post('/score', authenticateToken, async (req, res) => {
+router.post('/score', optionalAuth, async (req, res) => {
   const { answers, questions, documentId, timeTaken, timeLimit, wasTimedOut, quizParams } = req.body;
   if (!Array.isArray(answers) || !Array.isArray(questions)) return res.status(400).json({ error: 'Invalid payload' });
   
@@ -438,7 +439,7 @@ router.post('/score', authenticateToken, async (req, res) => {
           difficulty,
           question: questionText,
           userAnswer,
-          correctAnswer: expectedAnswer,
+          correctAnswer: expectedAnswer,  
           explanation: q.explanation || '',
           marksObtained: 0,
           totalMarks: questionMarks
@@ -650,23 +651,27 @@ router.post('/score', authenticateToken, async (req, res) => {
     customInstruction: quizParams?.instruction || '' // For mode 3
   };
   
-  if (documentId) {
-    const d = await Document.findById(documentId);
-    if (!d) return res.status(404).json({ error: 'Document not found' });
-    if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
-    await Document.findByIdAndUpdate(documentId, { $push: { attempts: attemptData } });
+  // Only save results if user is authenticated
+  if (req.user) {
+    if (documentId) {
+      const d = await Document.findById(documentId);
+      if (!d) return res.status(404).json({ error: 'Document not found' });
+      if (d.uploadedBy && d.uploadedBy.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Access denied to document' });
+      await Document.findByIdAndUpdate(documentId, { $push: { attempts: attemptData } });
 
-    // Invalidate dashboard cache to ensure fresh data
-    invalidateCache();
-  } else {
-    // No document ID - this is a general/non-PDF quiz
-    // Save to user's general attempts
-    const User = (await import('../models/User.js')).default;
-    await User.findByIdAndUpdate(req.user._id, { $push: { generalAttempts: attemptData } });
-    
-    // Invalidate dashboard cache
-    invalidateCache();
+      // Invalidate dashboard cache to ensure fresh data
+      invalidateCache();
+    } else {
+      // No document ID - this is a general/non-PDF quiz
+      // Save to user's general attempts
+      const User = (await import('../models/User.js')).default;
+      await User.findByIdAndUpdate(req.user._id, { $push: { generalAttempts: attemptData } });
+      
+      // Invalidate dashboard cache
+      invalidateCache();
+    }
   }
+  // Guest users get results but they are not persisted
   
   res.json({ 
     score: obtainedMarks, 
