@@ -586,10 +586,14 @@ Generate an optimal learning path with specific, searchable video topics.`;
 
 // Recommend videos based on chat history analysis
 router.post('/recommend-by-chat', optionalAuth, async (req, res) => {
-  const { chatId } = req.body;
+  const { chatId, messageId } = req.body;
   
   if (!chatId) {
     return res.status(400).json({ error: 'chatId required' });
+  }
+  
+  if (!messageId) {
+    return res.status(400).json({ error: 'messageId required' });
   }
   
   try {
@@ -601,11 +605,23 @@ router.post('/recommend-by-chat', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'Chat not found' });
     }
     
-    // Extract topics from chat messages
-    const chatContent = chat.messages
+    // Find the specific message
+    const message = chat.messages.find(m => m._id.toString() === messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    
+    // Get context by including a few messages before and after
+    const messageIndex = chat.messages.findIndex(m => m._id.toString() === messageId);
+    const contextMessages = chat.messages.slice(
+      Math.max(0, messageIndex - 2),
+      Math.min(chat.messages.length, messageIndex + 3)
+    );
+    
+    // Extract topics from chat messages with context
+    const chatContent = contextMessages
       .map(m => m.content)
-      .join(' ')
-      .slice(0, 3000);
+      .join('\n');
     
     const analysisSystem = `Analyze this chat conversation and identify key learning topics for video recommendations.
 

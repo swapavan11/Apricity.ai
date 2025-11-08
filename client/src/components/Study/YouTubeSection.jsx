@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Loader from "../common/Loader";
 import axios from "axios";
 
-export default function YouTubeSection({ yt, loadingYt, question, refreshYouTubeRecommendations, selected, docs, chats, activeChatId }) {
+export default function YouTubeSection({ yt, loadingYt, question, refreshYouTubeRecommendations, selected, docs, chats, activeChatId, triggerChatYt }) {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [summarizing, setSummarizing] = useState(false);
   const [summary, setSummary] = useState("");
@@ -20,13 +20,16 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
   const [loadingInstructionYt, setLoadingInstructionYt] = useState(false);
   
   // Chat-based recommendations
-  const [chatYt, setChatYt] = useState(null);
-  const [loadingChatYt, setLoadingChatYt] = useState(false);
+  const [chatYt, setChatYt] = useState({});
+  const [loadingChatYt, setLoadingChatYt] = useState({});
   
   // Video summarization
   const [videoUrl, setVideoUrl] = useState("");
   const [videoSummary, setVideoSummary] = useState(null);
   const [loadingVideoSummary, setLoadingVideoSummary] = useState(false);
+  
+  // Track which messages have been recommended
+  const [recommendedMessages, setRecommendedMessages] = useState(new Set());
   
   // Update tab when selected document changes
   React.useEffect(() => {
@@ -35,6 +38,31 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
     }
   }, [selected]);
   
+  // Auto-generate chat recommendations when triggered from ChatTutor
+  React.useEffect(() => {
+    if (triggerChatYt > 0 && yt?.mode === 'chat' && yt?.messageId && yt?.recommendations) {
+      console.log('YouTubeSection received recommendations:', yt.recommendations);
+      
+      // Switch to chat tab
+      setYtTab('chat');
+      
+      // Store the recommendations for this message
+      setChatYt(prev => ({
+        ...prev,
+        [yt.messageId]: yt.recommendations
+      }));
+      
+      // Mark this message as recommended
+      setRecommendedMessages(prev => new Set([...prev, yt.messageId]));
+      
+      // Clear loading state
+      setLoadingChatYt(prev => ({
+        ...prev,
+        [yt.messageId]: false
+      }));
+    }
+  }, [triggerChatYt, yt]);
+  
   // Parse PDF and generate comprehensive video series
   const parsePdfForVideos = async () => {
     if (!selected || selected === 'all') return;
@@ -42,8 +70,9 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
     setLoadingPdfYt(true);
     try {
       const token = localStorage.getItem("token");
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
       const response = await axios.get(
-        `http://localhost:5000/api/youtube/recommend-by-pdf?documentId=${selected}`,
+        `${apiBase}/api/youtube/recommend-by-pdf?documentId=${selected}`,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
       );
       setPdfYt(response.data);
@@ -57,66 +86,150 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
   
   // Generate videos based on user instruction
   const generateFromInstruction = async () => {
-    if (!instruction.trim()) return;
+    if (!instruction.trim() || loadingInstructionYt) return;
     
     setLoadingInstructionYt(true);
+    setInstructionYt(null); // Clear previous results
+    
     try {
       const token = localStorage.getItem("token");
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
       const response = await axios.post(
-        `http://localhost:5000/api/youtube/recommend-by-instruction`,
-        { instruction },
+        `${apiBase}/api/youtube/recommend-by-instruction`,
+        { instruction: instruction.trim() },
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
       );
-      setInstructionYt(response.data);
+      
+      if (response.data && !response.data.error) {
+        setInstructionYt(response.data);
+      } else {
+        setInstructionYt({ error: response.data.error || "Failed to generate recommendations" });
+      }
     } catch (error) {
       console.error("Instruction generation error:", error);
-      setInstructionYt({ error: "Failed to generate recommendations" });
+      setInstructionYt({ error: "Failed to generate recommendations. Please try again." });
     } finally {
       setLoadingInstructionYt(false);
     }
   };
   
   // Analyze chat and generate recommendations
-  const generateFromChat = async () => {
-    if (!activeChatId) return;
+  const generateFromChat = async (messageId) => {
+    if (!activeChatId || !messageId) return;
     
-    setLoadingChatYt(true);
+    // Clear previous recommendations for this message if regenerating
+    if (recommendedMessages.has(messageId)) {
+      clearChatRecommendations(messageId);
+    }
+    
+    setLoadingChatYt(prev => ({ ...prev, [messageId]: true }));
     try {
       const token = localStorage.getItem("token");
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
       const response = await axios.post(
-        `http://localhost:5000/api/youtube/recommend-by-chat`,
-        { chatId: activeChatId },
+        `${apiBase}/api/youtube/recommend-by-chat`,
+        { chatId: activeChatId, messageId },
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
       );
-      setChatYt(response.data);
+      
+      // Validate response data
+      if (response.data && !response.data.error) {
+        setChatYt(prev => ({ ...prev, [messageId]: response.data }));
+        setRecommendedMessages(prev => new Set([...prev, messageId]));
+        setYtTab('chat'); // Switch to chat tab when recommendations are ready
+      } else {
+        console.error('Invalid response data:', response.data);
+        setChatYt(prev => ({ 
+          ...prev, 
+          [messageId]: { error: response.data?.error || "Failed to generate recommendations" } 
+        }));
+      }
     } catch (error) {
       console.error("Chat analysis error:", error);
-      setChatYt({ error: "Failed to analyze chat" });
+      setChatYt(prev => ({ ...prev, [messageId]: { error: "Failed to generate recommendations" } }));
     } finally {
-      setLoadingChatYt(false);
+      setLoadingChatYt(prev => ({ ...prev, [messageId]: false }));
     }
   };
   
-  // Summarize video by URL
+  // Validate YouTube URL
+  const isValidYouTubeUrl = (url) => {
+    const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+    return pattern.test(url);
+  };
+
+  // Summarize YouTube video
   const summarizeVideo = async () => {
-    if (!videoUrl.trim()) return;
+    if (!videoUrl.trim() || loadingVideoSummary) return;
+    
+    if (!isValidYouTubeUrl(videoUrl)) {
+      setVideoSummary({ error: "Please enter a valid YouTube URL" });
+      return;
+    }
     
     setLoadingVideoSummary(true);
+    setVideoSummary(null); // Clear previous summary
+    
     try {
       const token = localStorage.getItem("token");
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
       const response = await axios.post(
-        `http://localhost:5000/api/youtube/summarize`,
-        { videoUrl },
+        `${apiBase}/api/youtube/summarize`,
+        { videoUrl: videoUrl.trim() },
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
       );
-      setVideoSummary(response.data);
+      
+      if (response.data && !response.data.error) {
+        setVideoSummary(response.data);
+      } else {
+        setVideoSummary({ error: response.data.error || "Failed to summarize video" });
+      }
     } catch (error) {
       console.error("Video summarization error:", error);
-      setVideoSummary({ error: "Failed to summarize video" });
+      setVideoSummary({ 
+        error: error.response?.data?.error || "Failed to summarize video. Please check the URL and try again." 
+      });
     } finally {
       setLoadingVideoSummary(false);
     }
   };
+  
+  // Function to clear recommendations
+  const clearChatRecommendations = (messageId) => {
+    if (messageId) {
+      // Clear specific message recommendations
+      setChatYt(prev => {
+        const newState = { ...prev };
+        delete newState[messageId];
+        return newState;
+      });
+      setRecommendedMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(messageId);
+        return newSet;
+      });
+    } else {
+      // Clear all recommendations
+      setChatYt({});
+      setRecommendedMessages(new Set());
+    }
+  };
+  // Function to check if a specific tab has loading state
+  const isLoading = (tabId) => {
+    switch (tabId) {
+      case 'pdf':
+        return loadingPdfYt;
+      case 'instruction':
+        return loadingInstructionYt;
+      case 'chat':
+        return Object.values(loadingChatYt).some(loading => loading);
+      case 'summarize':
+        return loadingVideoSummary;
+      default:
+        return false;
+    }
+  };
+  
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Chrome-style YouTube section tabs */}
@@ -269,31 +382,35 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
       )}
       
       {/* By Chat Mode - Analysis State */}
-      {ytTab === 'chat' && !chatYt && !loadingChatYt && (
+      {ytTab === 'chat' && Object.keys(chatYt).length === 0 && Object.keys(loadingChatYt).length === 0 && (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-          <div style={{ textAlign: "center", maxWidth: "500px" }}>
+          <div style={{ textAlign: "center", maxWidth: "600px" }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>💬</div>
             <div style={{ fontSize: "16px", fontWeight: 600, marginBottom: "12px", color: "var(--text)" }}>
-              Analyze Active Chat for Videos
+              Generate Videos from Chat Messages
             </div>
-            {activeChatId ? (
-              <>
-                <div style={{ marginBottom: "20px", color: "var(--muted)" }}>
-                  We'll analyze your current chat conversation and recommend relevant educational videos
-                </div>
-                <button
-                  className="primary"
-                  onClick={generateFromChat}
-                  style={{ padding: "12px 24px", fontSize: "14px" }}
-                >
-                  🔍 Analyze Chat & Get Videos
-                </button>
-              </>
-            ) : (
-              <div style={{ color: "var(--muted)" }}>
-                Start a chat conversation first, then come back here to get video recommendations based on your discussion
+            <div style={{ marginBottom: "24px", color: "var(--muted)", lineHeight: "1.6" }}>
+              Go to the <strong style={{ color: "var(--accent)" }}>Chat Tutor</strong> tab and click the 
+              <strong style={{ color: "var(--accent)" }}> "📺 Get YouTube Recommendations"</strong> button 
+              on any chat message to analyze that message and generate relevant video recommendations.
+            </div>
+            <div style={{ 
+              padding: "16px 20px", 
+              background: "rgba(124, 156, 255, 0.1)", 
+              border: "1px solid rgba(124, 156, 255, 0.3)",
+              borderRadius: "10px",
+              marginBottom: "20px"
+            }}>
+              <div style={{ fontSize: "13px", color: "var(--accent)", fontWeight: 600, marginBottom: "8px" }}>
+                💡 How it works:
               </div>
-            )}
+              <div style={{ fontSize: "12px", color: "var(--muted)", textAlign: "left", lineHeight: "1.8" }}>
+                1. Chat about any topic in the Chat Tutor<br/>
+                2. Click "📺 Get YouTube Recommendations" on a message<br/>
+                3. Message-specific videos will appear here<br/>
+                4. Click "Clear" to remove recommendations
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -339,11 +456,15 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
         </div>
       )}
 
-      {loadingYt && <Loader text="Generating YouTube recommendations..." />}
-      {loadingPdfYt && <Loader text="Parsing PDF and generating video series..." />}
-      {loadingInstructionYt && <Loader text="Creating your custom learning series..." />}
-      {loadingChatYt && <Loader text="Analyzing chat and finding relevant videos..." />}
-      {loadingVideoSummary && <Loader text="Summarizing video content..." />}
+      {/* Loading states - Only show for active tab */}
+      {ytTab === 'pdf' && loadingPdfYt && <Loader text="Parsing PDF and generating video series..." />}
+      {ytTab === 'instruction' && loadingInstructionYt && <Loader text="Creating your custom learning series..." />}
+      {ytTab === 'summarize' && loadingVideoSummary && <Loader text="Summarizing video content..." />}
+      {ytTab === 'chat' && Object.values(loadingChatYt).some(loading => loading) && (
+        <div style={{ padding: "16px" }}>
+          <Loader text="Analyzing conversation and finding relevant videos..." />
+        </div>
+      )}
 
       {/* By PDF Mode - Show PDF-based recommendations */}
       {ytTab === 'pdf' && pdfYt && !loadingPdfYt && (
@@ -645,58 +766,99 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
       )}
       
       {/* By Chat Mode - Show Results */}
-      {ytTab === 'chat' && chatYt && !loadingChatYt && (
+      {ytTab === 'chat' && Object.keys(chatYt).length > 0 && (
         <div style={{ flex: 1, overflow: "auto", minHeight: 0, scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="hide-scrollbar">
-          {/* Chat Analysis Info */}
-          {chatYt.chatAnalysis && (
-            <div style={{ marginBottom: 16, padding: "16px", background: "rgba(110, 231, 183, 0.1)", borderLeft: "3px solid var(--accent2)", borderRadius: "8px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent2)", marginBottom: "4px" }}>💬 Chat Analysis</div>
-              <div style={{ fontSize: "12px", color: "var(--muted)" }}>{chatYt.chatAnalysis}</div>
-            </div>
-          )}
-          
-          {/* Keywords */}
-          {chatYt.extraction?.keywords && chatYt.extraction.keywords.length > 0 && (
-            <div style={{ marginBottom: 16, padding: "12px 16px", background: "linear-gradient(135deg, #1a244d 0%, #0d142c 100%)", borderRadius: 8, border: "1px solid #2a3a6d" }}>
-              <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "8px" }}>Topics Discussed:</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {chatYt.extraction.keywords.map((keyword, i) => (
-                  <span key={i} style={{ padding: "4px 10px", background: "rgba(110, 231, 183, 0.15)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "12px", fontSize: "11px", color: "#6ee7b7", fontWeight: 600 }}>
-                    {keyword}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Video Grid */}
-          <div style={{ marginBottom: 16, padding: "12px 16px", background: "rgba(110, 231, 183, 0.08)", borderLeft: "3px solid var(--accent2)", borderRadius: "6px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent2)", marginBottom: "4px" }}>📚 Related Videos</div>
-            <div style={{ fontSize: "12px", color: "var(--muted)", lineHeight: "1.5" }}>Based on your chat conversation</div>
+          {/* Clear all button */}
+          <div style={{ padding: "0 16px 16px" }}>
+            <button 
+              className="secondary"
+              onClick={() => clearChatRecommendations()}
+              style={{ 
+                padding: "8px 16px",
+                fontSize: "13px",
+                opacity: 0.8
+              }}
+            >
+              Clear All Recommendations
+            </button>
           </div>
-          
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", width: "100%" }}>
-            {chatYt.suggestions?.map((s, i) => (
-              <div key={i} style={{ background: "#0d142c", border: "1px solid #1a244d", borderRadius: 12, cursor: "pointer", transition: "all 0.2s ease", overflow: "hidden" }}
-                onClick={() => { setSelectedVideo(s); setSummary(""); }}>
-                <div style={{ width: "100%", aspectRatio: "16/9", background: s.videoId ? `url(https://img.youtube.com/vi/${s.videoId}/mqdefault.jpg) center/cover` : "linear-gradient(135deg, #1a244d 0%, #0d142c 100%)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ width: "60px", height: "60px", background: "rgba(255, 255, 255, 0.95)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", color: "#dc2626" }}>▶</div>
-                  <div style={{ position: "absolute", top: 8, right: 8, width: "32px", height: "32px", background: "rgba(0,0,0,0.8)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: 700, color: "#fff", border: "2px solid var(--accent2)" }}>{s.sequence || i + 1}</div>
-                </div>
-                <div style={{ padding: "12px" }}>
-                  <div style={{ fontWeight: 600, marginBottom: 6, fontSize: "14px", color: "var(--text)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: "1.4" }}>{s.title}</div>
-                  <div style={{ fontSize: "11px", color: "#6ee7b7", fontWeight: 500, marginBottom: 8 }}>📺 {s.channel}</div>
-                  {s.tags && s.tags.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                      {s.tags.map((tag, tagIndex) => (
-                        <span key={tagIndex} style={{ padding: "3px 8px", background: "rgba(110, 231, 183, 0.1)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "10px", fontSize: "10px", color: "#6ee7b7", fontWeight: 600 }}>{tag}</span>
-                      ))}
+
+          {/* Message-specific recommendations */}
+          {Object.entries(chatYt).map(([messageId, recommendations]) => (
+            <div key={messageId} style={{ marginBottom: "32px" }}>
+              {/* Message recommendations header */}
+              <div style={{ 
+                marginBottom: 16, 
+                padding: "16px",
+                background: "rgba(110, 231, 183, 0.1)",
+                borderLeft: "3px solid var(--accent2)",
+                borderRadius: "8px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
+              }}>
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent2)", marginBottom: "4px" }}>
+                    💬 Message Recommendations
+                  </div>
+                  {recommendations.chatAnalysis && (
+                    <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                      {recommendations.chatAnalysis}
                     </div>
                   )}
                 </div>
+                <button 
+                  className="secondary"
+                  onClick={() => clearChatRecommendations(messageId)}
+                  style={{ 
+                    padding: "6px 12px",
+                    fontSize: "12px",
+                    opacity: 0.8
+                  }}
+                >
+                  Clear
+                </button>
               </div>
-            ))}
-          </div>
+
+              {/* Keywords */}
+              {recommendations.extraction?.keywords && recommendations.extraction.keywords.length > 0 && (
+                <div style={{ marginBottom: 16, padding: "12px 16px", background: "linear-gradient(135deg, #1a244d 0%, #0d142c 100%)", borderRadius: 8, border: "1px solid #2a3a6d" }}>
+                  <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "8px" }}>Topics Discussed:</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {recommendations.extraction.keywords.map((keyword, i) => (
+                      <span key={i} style={{ padding: "4px 10px", background: "rgba(110, 231, 183, 0.15)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "12px", fontSize: "11px", color: "#6ee7b7", fontWeight: 600 }}>
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Video Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", width: "100%" }}>
+                {recommendations.suggestions?.map((s, i) => (
+                  <div key={i} style={{ background: "#0d142c", border: "1px solid #1a244d", borderRadius: 12, cursor: "pointer", transition: "all 0.2s ease", overflow: "hidden" }}
+                    onClick={() => { setSelectedVideo(s); setSummary(""); }}>
+                    <div style={{ width: "100%", aspectRatio: "16/9", background: s.videoId ? `url(https://img.youtube.com/vi/${s.videoId}/mqdefault.jpg) center/cover` : "linear-gradient(135deg, #1a244d 0%, #0d142c 100%)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div style={{ width: "60px", height: "60px", background: "rgba(255, 255, 255, 0.95)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", color: "#dc2626" }}>▶</div>
+                      <div style={{ position: "absolute", top: 8, right: 8, width: "32px", height: "32px", background: "rgba(0,0,0,0.8)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: 700, color: "#fff", border: "2px solid var(--accent2)" }}>{s.sequence || i + 1}</div>
+                    </div>
+                    <div style={{ padding: "12px" }}>
+                      <div style={{ fontWeight: 600, marginBottom: 6, fontSize: "14px", color: "var(--text)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: "1.4" }}>{s.title}</div>
+                      <div style={{ fontSize: "11px", color: "#6ee7b7", fontWeight: 500, marginBottom: 8 }}>📺 {s.channel}</div>
+                      {s.tags && s.tags.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                          {s.tags.map((tag, tagIndex) => (
+                            <span key={tagIndex} style={{ padding: "3px 8px", background: "rgba(110, 231, 183, 0.1)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "10px", fontSize: "10px", color: "#6ee7b7", fontWeight: 600 }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
       
@@ -1121,8 +1283,9 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
                         setSummarizing(true);
                         try {
                           const token = localStorage.getItem("token");
+                          const apiBase = import.meta.env.VITE_API_BASE_URL || '';
                           const response = await axios.post(
-                            "http://localhost:5000/api/youtube/summarize",
+                            `${apiBase}/api/youtube/summarize`,
                             { videoId: selectedVideo.videoId },
                             { headers: { Authorization: `Bearer ${token}` } }
                           );

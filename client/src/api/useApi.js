@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 
 export default function useApi() {
-  const base = "";
+  // Use environment variable for API base URL, fallback to empty string for Vite proxy
+  const base = import.meta.env.VITE_API_BASE_URL || "";
 
   return useMemo(() => ({
     listDocs: async () => {

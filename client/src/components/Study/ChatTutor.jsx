@@ -26,6 +26,8 @@ export default function ChatTutor({
   setLoadingAsk,
   setYt,
   setActiveTab,
+  generateChatVideoRecommendations,
+  generatingChatYt
 }) {
   // --- Speech Recognition (Mic) ---
   const [isListening, setIsListening] = useState(false);
@@ -112,25 +114,20 @@ export default function ChatTutor({
   
   // Handler for analyzing message and getting YouTube recommendations
   const handleAnalyzeForYouTube = async (messageText, messageIndex) => {
+    // Set analyzing state for this specific message
+    setAnalyzingMessageId(messageIndex);
     try {
-      setAnalyzingMessageId(messageIndex);
+      // Get message ID from activeChat
+      const messageId = activeChat?.messages[messageIndex]?._id;
+      if (!messageId) {
+        throw new Error('Message not found');
+      }
       
-      // Get YouTube recommendations based on message text
-      const ytRes = await api.youtube(messageText, selected === "all" ? null : selected);
-      setYt(ytRes);
-      
-      // Switch to YouTube tab to show recommendations
-      setActiveTab('youtube');
-      
-    } catch (err) {
-      console.error('YouTube recommendation error:', err);
-      setYt({
-        query: messageText,
-        suggestions: [],
-        error: "Failed to load YouTube recommendations.",
-      });
-      // Still switch to YouTube tab to show error
-      setActiveTab('youtube');
+      // Generate recommendations for this specific message
+      // Tab switching will be handled automatically by the parent after the API call completes
+      await generateChatVideoRecommendations(messageId);
+    } catch (error) {
+      console.error('Error analyzing message:', error);
     } finally {
       setAnalyzingMessageId(null);
     }
@@ -1808,14 +1805,14 @@ export default function ChatTutor({
                     {/* Right side - YouTube analyze button */}
                     <button
                       onClick={() => handleAnalyzeForYouTube(m.text, idx)}
-                      disabled={analyzingMessageId === idx}
+                      disabled={generatingChatYt}
                       style={{
-                        background: analyzingMessageId === idx 
-                          ? "linear-gradient(135deg, rgba(124, 156, 255, 0.25) 0%, rgba(90, 123, 216, 0.2) 100%)" 
+                        background: generatingChatYt 
+                          ? "linear-gradient(135deg, rgba(124, 156, 255, 0.3) 0%, rgba(90, 123, 216, 0.25) 100%)" 
                           : "linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(90, 123, 216, 0.1) 100%)",
                         border: "1px solid rgba(124, 156, 255, 0.3)",
-                        color: analyzingMessageId === idx ? "var(--accent)" : "#7c9cff",
-                        cursor: analyzingMessageId === idx ? "wait" : "pointer",
+                        color: generatingChatYt ? "var(--accent)" : "#7c9cff",
+                        cursor: generatingChatYt ? "wait" : "pointer",
                         display: "flex",
                         alignItems: "center",
                         gap: "6px",
@@ -1825,9 +1822,11 @@ export default function ChatTutor({
                         fontWeight: 600,
                         transition: "all 0.2s ease",
                         whiteSpace: "nowrap",
+                        backgroundSize: generatingChatYt ? "200% 200%" : "100% 100%",
+                        animation: generatingChatYt ? "gradientShift 2s ease infinite" : "none",
                       }}
                       onMouseEnter={(e) => {
-                        if (analyzingMessageId !== idx) {
+                        if (!generatingChatYt) {
                           e.currentTarget.style.background = "linear-gradient(135deg, rgba(124, 156, 255, 0.3) 0%, rgba(90, 123, 216, 0.25) 100%)";
                           e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.5)";
                           e.currentTarget.style.color = "#ffffff";
@@ -1835,20 +1834,31 @@ export default function ChatTutor({
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (analyzingMessageId !== idx) {
+                        if (!generatingChatYt) {
                           e.currentTarget.style.background = "linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(90, 123, 216, 0.1) 100%)";
                           e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.3)";
                           e.currentTarget.style.color = "#7c9cff";
                           e.currentTarget.style.transform = "translateY(0)";
                         }
                       }}
-                      title="Analyze message content and get YouTube video recommendations"
+                      title="Analyze chat conversation and get YouTube video recommendations"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
-                        <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="currentColor"></polygon>
-                      </svg>
-                      {analyzingMessageId === idx ? "Analyzing..." : "Analyse & recommend YT video"}
+                      {generatingChatYt ? (
+                        <>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                          </svg>
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+                            <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="currentColor"></polygon>
+                          </svg>
+                          <span>Analyse & recommend YT video</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 )}

@@ -48,6 +48,75 @@ export default function Study({ selected, docs }) {
   const [notebookOpen, setNotebookOpen] = useState(false);
   const [retakeParams, setRetakeParams] = useState(null);
 
+  // State to trigger chat-based YT recommendations
+  const [triggerChatYt, setTriggerChatYt] = useState(0);
+  const [generatingChatYt, setGeneratingChatYt] = useState(false);
+  const [currentMessageId, setCurrentMessageId] = useState(null);
+  
+  // Function to generate chat-based video recommendations (called from ChatTutor)
+  const generateChatVideoRecommendations = async (messageId) => {
+    if (!messageId || !activeChatId) {
+      console.error('Missing messageId or activeChatId:', { messageId, activeChatId });
+      return false;
+    }
+    
+    console.log('Starting video recommendation generation for:', { messageId, chatId: activeChatId });
+    
+    // Set loading state
+    setGeneratingChatYt(true);
+    setCurrentMessageId(messageId);
+    
+    try {
+      // Make API call directly
+      const token = localStorage.getItem('token');
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+      console.log('Calling API endpoint...');
+      
+      const response = await fetch(`${apiBase}/api/youtube/recommend-by-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          chatId: activeChatId,
+          messageId
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API error:', response.status, errorText);
+        throw new Error(`Failed to get recommendations: ${response.status}`);
+      }
+      
+      const recommendations = await response.json();
+      console.log('Recommendations received:', recommendations);
+      
+      // Update state with recommendations
+      setYt({
+        messageId,
+        chatId: activeChatId,
+        mode: 'chat',
+        recommendations
+      });
+      
+      // Increment trigger to notify YouTubeSection
+      setTriggerChatYt(prev => prev + 1);
+      
+      // Switch to YouTube tab after successful generation
+      setActiveTab('youtube');
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to generate video recommendations:', error);
+      return false;
+    } finally {
+      setGeneratingChatYt(false);
+      setCurrentMessageId(null);
+    }
+  };
+
   // Helper: refresh YouTube suggestions (used from UI)
   const refreshYouTubeRecommendations = async () => {
     if (!question.trim()) return;
@@ -160,6 +229,8 @@ export default function Study({ selected, docs }) {
     setYt,
     setActiveTab,
     onPdfPageClick: handlePdfPageClick,
+    generateChatVideoRecommendations,
+    generatingChatYt,
   };
 
   return (
@@ -330,7 +401,7 @@ export default function Study({ selected, docs }) {
           )}
 
           {activeTab === 'youtube' && (
-            <YouTubeSection yt={yt} loadingYt={loadingYt} question={question} refreshYouTubeRecommendations={refreshYouTubeRecommendations} selected={selected} docs={docs} chats={chats} activeChatId={activeChatId} />
+            <YouTubeSection yt={yt} loadingYt={loadingYt} question={question} refreshYouTubeRecommendations={refreshYouTubeRecommendations} selected={selected} docs={docs} chats={chats} activeChatId={activeChatId} triggerChatYt={triggerChatYt} />
           )}
 
           {activeTab === 'history' && (

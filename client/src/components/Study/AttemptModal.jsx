@@ -248,6 +248,50 @@ export default function AttemptModal({ attempt, onClose, onRetake, documentId })
                 </span>
               </div>
 
+              {/* Difficulty Badge */}
+              {attempt.quizParams?.difficulty && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: '0.85em', color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>
+                    Difficulty Level:
+                  </div>
+                  <span style={{
+                    padding: '8px 16px',
+                    background: attempt.quizParams.difficulty === 'easy' 
+                      ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(34, 197, 94, 0.15) 100%)'
+                      : attempt.quizParams.difficulty === 'medium'
+                      ? 'linear-gradient(135deg, rgba(251, 146, 60, 0.3) 0%, rgba(251, 146, 60, 0.15) 100%)'
+                      : 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0.15) 100%)',
+                    color: attempt.quizParams.difficulty === 'easy'
+                      ? '#22c55e'
+                      : attempt.quizParams.difficulty === 'medium'
+                      ? '#fb923c'
+                      : '#ef4444',
+                    border: attempt.quizParams.difficulty === 'easy'
+                      ? '2px solid rgba(34, 197, 94, 0.5)'
+                      : attempt.quizParams.difficulty === 'medium'
+                      ? '2px solid rgba(251, 146, 60, 0.5)'
+                      : '2px solid rgba(239, 68, 68, 0.5)',
+                    borderRadius: 12,
+                    fontSize: '0.9em',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    boxShadow: attempt.quizParams.difficulty === 'easy'
+                      ? '0 2px 8px rgba(34, 197, 94, 0.3)'
+                      : attempt.quizParams.difficulty === 'medium'
+                      ? '0 2px 8px rgba(251, 146, 60, 0.3)'
+                      : '0 2px 8px rgba(239, 68, 68, 0.3)',
+                    textTransform: 'capitalize'
+                  }}>
+                    {attempt.quizParams.difficulty === 'easy' && '🟢'}
+                    {attempt.quizParams.difficulty === 'medium' && '🟡'}
+                    {attempt.quizParams.difficulty === 'hard' && '🔴'}
+                    {attempt.quizParams.difficulty}
+                  </span>
+                </div>
+              )}
+
               {/* Selected Topics for select mode (2nd radio - PDF parsed topics) */}
               {attempt.quizParams?.mode === 'select' && attempt.quizParams?.topics && attempt.quizParams.topics.length > 0 && (
                 <div style={{ marginBottom: 14 }}>
