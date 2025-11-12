@@ -11,10 +11,10 @@ const OAuthCallback = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-  const token = params.get('token');
+    const token = params.get('token');
     const errorParam = params.get('error');
-  const statusParam = params.get('status');
-  if (statusParam) setStatus(statusParam);
+    const statusParam = params.get('status');
+    if (statusParam) setStatus(statusParam);
 
     const finalize = async () => {
       if (errorParam) {
@@ -23,17 +23,26 @@ const OAuthCallback = () => {
         setTimeout(() => navigate('/auth?mode=auth'), 1500);
         return;
       }
-      // If token exists in query (legacy flow), pass it. Otherwise attempt cookie-based finalization.
+      
+      // If token exists in query, use it. Otherwise attempt cookie-based finalization.
+      // The backend should have set an HttpOnly cookie, but we also get token in URL as fallback
       const result = await completeOAuthLogin(token);
+      
       // Remove token from URL to avoid leakage
       try {
         if (token) {
           const cleanUrl = window.location.pathname + (statusParam ? `?status=${encodeURIComponent(statusParam)}` : '');
           window.history.replaceState({}, document.title, cleanUrl);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error cleaning URL:', e);
+      }
+      
       if (result.success) {
-        navigate('/study');
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          navigate('/study');
+        }, 100);
       } else {
         setError(result.message || 'OAuth login failed');
         setTimeout(() => navigate('/auth?mode=auth'), 1500);

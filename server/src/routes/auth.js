@@ -267,7 +267,21 @@ router.get('/profile', authenticateToken, async (req, res) => {
   try {
     // req.user comes from passport; ensure we have a fresh doc with password so hasPassword is computed
     const u = await User.findById(req.user._id);
-    res.json({ success: true, user: u.getPublicProfile() });
+    const response = { success: true, user: u.getPublicProfile() };
+    
+    // If request came with a cookie but no Authorization header, include token in response
+    // This helps frontend sync token from cookie to localStorage
+    const authHeader = req.headers['authorization'];
+    if (!authHeader && req.headers.cookie) {
+      const cookieHeader = req.headers.cookie;
+      const match = cookieHeader.split(';').map(s => s.trim()).find(s => s.startsWith('token='));
+      if (match) {
+        const tokenFromCookie = match.split('=')[1];
+        response.token = tokenFromCookie;
+      }
+    }
+    
+    res.json(response);
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({
@@ -501,18 +515,27 @@ router.get('/google/callback',
       const token = generateToken(req.user._id);
       // Try to extract status info from passport auth (if available on req.authInfo)
       const status = req.authInfo?.status || 'returning';
+      
       // Set JWT as an HttpOnly cookie so frontend does not need the token in the URL
       const cookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        // If frontend and backend are on different top-level domains, you may need 'none' and HTTPS
+        // Use 'none' for cross-origin in production (requires HTTPS)
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days; tune as needed
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        domain: process.env.COOKIE_DOMAIN || undefined,
+        path: '/'
       };
 
       res.cookie('token', token, cookieOptions);
-      // Redirect to frontend callback without exposing token in URL
-      res.redirect(`${config.FRONTEND_URL}/auth/callback?status=${encodeURIComponent(status)}`);
+      
+      // Also include token in redirect URL as fallback for clients that can't read HttpOnly cookies
+      // This ensures compatibility with all clients
+      const redirectUrl = new URL(`${config.FRONTEND_URL}/auth/callback`);
+      redirectUrl.searchParams.set('status', status);
+      redirectUrl.searchParams.set('token', token); // Include token as fallback
+      
+      res.redirect(redirectUrl.toString());
     } catch (error) {
       console.error('Google OAuth callback error:', error);
       res.redirect(`${config.FRONTEND_URL}/auth?mode=auth&error=oauth_callback_failed`);

@@ -11,6 +11,11 @@ export const useAuth = () => {
   return context;
 };
 
+// Get API base URL from environment
+const getApiBaseUrl = () => {
+  return import.meta.env.VITE_API_BASE_URL || '';
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +24,11 @@ export const AuthProvider = ({ children }) => {
 
   // Configure axios defaults
   useEffect(() => {
+    const baseURL = getApiBaseUrl();
+    if (baseURL) {
+      axios.defaults.baseURL = baseURL;
+    }
+    
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     } else {
@@ -59,11 +69,27 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('token', incomingToken);
         setToken(incomingToken);
         axios.defaults.headers.common['Authorization'] = `Bearer ${incomingToken}`;
+      } else {
+        // Try to read token from cookie if available (for cookie-based OAuth flow)
+        // The cookie should be set by the backend, but we need to check if it's accessible
+        // Since HttpOnly cookies can't be read by JS, we rely on the backend to send it back
+        // or we make a request that will include the cookie automatically
       }
 
       // Whether we have a token in storage or an HttpOnly cookie on the backend,
       // request the profile so the UI can be updated.
-      const response = await axios.get('/api/auth/profile');
+      // This request will automatically include cookies if they exist
+      const response = await axios.get('/api/auth/profile', {
+        withCredentials: true
+      });
+      
+      // If the response includes a token (for cookie-based auth), store it
+      if (response.data.token && !incomingToken) {
+        localStorage.setItem('token', response.data.token);
+        setToken(response.data.token);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+      }
+      
       setUser(response.data.user);
       setIsGuestMode(false);
       return { success: true };

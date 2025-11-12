@@ -24,9 +24,32 @@ import authRouter from './routes/auth.js';
 
 const app = express();
 
+// CORS configuration - support multiple origins for production
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [config.FRONTEND_URL];
+
 app.use(cors({ 
-  origin: config.FRONTEND_URL, 
-  credentials: true 
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, or same-origin requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      // In development, be more permissive
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
@@ -39,11 +62,14 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    // In production you should serve over HTTPS so secure can be true
+    // In production, require HTTPS for secure cookies
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'lax', // Allow OAuth redirect back to this server to carry the session
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    // Use 'none' for cross-origin in production, 'lax' for same-site
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    // Ensure domain is set correctly for production
+    domain: process.env.COOKIE_DOMAIN || undefined
   }
 }));
 

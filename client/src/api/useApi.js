@@ -8,7 +8,14 @@ export default function useApi() {
     listDocs: async () => {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${base}/api/upload`, { headers });
+      const res = await fetch(`${base}/api/upload`, { 
+        headers,
+        credentials: 'include' // Include cookies for cross-origin requests
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
       return res.json();
     },
     // Convenience helper: returns array of documents (or empty array)
@@ -16,7 +23,14 @@ export default function useApi() {
       const resp = await (async () => {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`${base}/api/upload`, { headers });
+        const res = await fetch(`${base}/api/upload`, { 
+          headers,
+          credentials: 'include'
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+        }
         return res.json();
       })();
       return (resp && resp.documents) ? resp.documents : [];
@@ -27,7 +41,16 @@ export default function useApi() {
       if (title) fd.append("title", title);
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${base}/api/upload`, { method: "POST", body: fd, headers });
+      const res = await fetch(`${base}/api/upload`, { 
+        method: "POST", 
+        body: fd, 
+        headers,
+        credentials: 'include'
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
       return res.json();
     },
     docFileUrl: (id, token) => {
