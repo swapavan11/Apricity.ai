@@ -29,11 +29,36 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [config.FRONTEND_URL];
 
+// Log CORS configuration on startup
+console.log('CORS Configuration:');
+console.log('  FRONTEND_URL:', config.FRONTEND_URL);
+console.log('  ALLOWED_ORIGINS:', allowedOrigins);
+console.log('  NODE_ENV:', process.env.NODE_ENV || 'development');
+
+// Helper to check if route is OAuth-related
+const isOAuthRoute = (path) => {
+  return path && (
+    path.includes('/api/auth/google/callback') ||
+    path.includes('/api/auth/google') ||
+    path.startsWith('/api/auth/google')
+  );
+};
+
 // CORS middleware - skip for OAuth callback routes (they're server-side redirects)
 app.use((req, res, next) => {
-  // Skip CORS for OAuth callback routes - these are server-side redirects from Google
-  if (req.path.startsWith('/api/auth/google/callback') || 
-      req.path.startsWith('/api/auth/google')) {
+  const path = req.path || req.url?.split('?')[0] || '';
+  
+  // Skip CORS entirely for OAuth routes - these are server-side redirects from Google
+  if (isOAuthRoute(path)) {
+    // Still set basic headers for OAuth routes but skip CORS check
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    // Handle OPTIONS preflight for OAuth routes
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
     return next();
   }
   
@@ -41,7 +66,9 @@ app.use((req, res, next) => {
   cors({ 
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps, Postman, OAuth redirects, or same-origin requests)
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        return callback(null, true);
+      }
       
       // Check if origin is in allowed list
       if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
@@ -51,6 +78,8 @@ app.use((req, res, next) => {
         if (process.env.NODE_ENV !== 'production') {
           callback(null, true);
         } else {
+          // Log for debugging
+          console.log(`CORS blocked: Origin "${origin}" not in allowed list:`, allowedOrigins);
           callback(new Error('Not allowed by CORS'));
         }
       }
