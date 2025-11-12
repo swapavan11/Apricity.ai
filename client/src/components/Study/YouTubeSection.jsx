@@ -40,17 +40,27 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
   
   // Auto-generate chat recommendations when triggered from ChatTutor
   React.useEffect(() => {
+    console.log('🎬 YouTubeSection effect triggered:', { 
+      triggerChatYt, 
+      mode: yt?.mode, 
+      hasMessageId: !!yt?.messageId,
+      hasRecommendations: !!yt?.recommendations 
+    });
+    
     if (triggerChatYt > 0 && yt?.mode === 'chat' && yt?.messageId && yt?.recommendations) {
-      console.log('YouTubeSection received recommendations:', yt.recommendations);
+      console.log('✅ All conditions met! Displaying recommendations');
+      console.log('📹 Video count:', yt.recommendations.suggestions?.length || 0);
       
       // Switch to chat tab
       setYtTab('chat');
+      console.log('🔄 Switched to "By Chat" tab');
       
       // Store the recommendations for this message
       setChatYt(prev => ({
         ...prev,
         [yt.messageId]: yt.recommendations
       }));
+      console.log('💾 Stored in chatYt state for messageId:', yt.messageId);
       
       // Mark this message as recommended
       setRecommendedMessages(prev => new Set([...prev, yt.messageId]));
@@ -60,6 +70,10 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
         ...prev,
         [yt.messageId]: false
       }));
+      
+      console.log('✨ Recommendations should now be visible in the UI');
+    } else {
+      console.log('⏭️ Skipping - conditions not met');
     }
   }, [triggerChatYt, yt]);
   

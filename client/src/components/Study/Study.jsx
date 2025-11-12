@@ -91,7 +91,12 @@ export default function Study({ selected, docs }) {
       }
       
       const recommendations = await response.json();
-      console.log('Recommendations received:', recommendations);
+      console.log('✅ Recommendations received successfully!');
+      console.log('📊 Data structure:', {
+        hasAnalysis: !!recommendations.chatAnalysis,
+        hasKeywords: !!recommendations.extraction?.keywords,
+        videoCount: recommendations.suggestions?.length || 0
+      });
       
       // Update state with recommendations
       setYt({
@@ -100,16 +105,20 @@ export default function Study({ selected, docs }) {
         mode: 'chat',
         recommendations
       });
+      console.log('💾 Stored recommendations for messageId:', messageId);
       
       // Increment trigger to notify YouTubeSection
       setTriggerChatYt(prev => prev + 1);
+      console.log('📡 Triggered YouTubeSection update');
       
       // Switch to YouTube tab after successful generation
       setActiveTab('youtube');
+      console.log('🔄 Switched to YouTube tab');
       
       return true;
     } catch (error) {
-      console.error('Failed to generate video recommendations:', error);
+      console.error('❌ Failed to generate video recommendations:', error);
+      alert('Failed to generate video recommendations. Please try again.');
       return false;
     } finally {
       setGeneratingChatYt(false);

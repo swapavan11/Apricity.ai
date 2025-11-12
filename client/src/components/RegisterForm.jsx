@@ -380,9 +380,8 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }) => {
       {/* Continue with Google under create account */}
       <div style={{ textAlign: 'center', marginTop: '1rem' }}>
         {(() => {
-          const origin = typeof window !== 'undefined' ? window.location.origin : '';
-          const isDev = origin.includes('localhost:5173');
-          const backendBase = isDev ? 'http://localhost:5000' : '';
+          // Use environment variable for API base URL, fallback to empty string for Vite proxy
+          const backendBase = import.meta.env.VITE_API_BASE_URL || '';
           const googleUrl = `${backendBase}/api/auth/google`;
           return (
             <a
