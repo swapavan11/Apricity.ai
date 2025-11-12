@@ -1,530 +1,758 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../components/AuthProvider';
 
-// Animated number counter component
-const AnimatedCounter = ({ end, duration = 2000 }) => {
-  const [count, setCount] = useState(0);
-  
+
+// Floating Animation Component
+const FloatingElement = ({ children, delay = 0, duration = 3 }) => {
+  const [style, setStyle] = useState({});
+
   useEffect(() => {
-    let startTime = null;
-    const animate = (currentTime) => {
-      if (!startTime) startTime = currentTime;
-      const progress = Math.min((currentTime - startTime) / duration, 1);
-      setCount(Math.floor(progress * end));
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
+    const animate = () => {
+      const time = Date.now() / 1000;
+      const y = Math.sin(time * (2 * Math.PI / duration) + delay) * 10;
+      setStyle({ transform: `translateY(${y}px)` });
     };
-    requestAnimationFrame(animate);
-  }, [end, duration]);
+    const interval = setInterval(animate, 16);
+    animate();
+    return () => clearInterval(interval);
+  }, [delay, duration]);
 
-  return <span>{count}+</span>;
+  return <div style={{ transition: 'transform 0.1s ease-out', ...style }}>{children}</div>;
 };
 
-const fadeInAnimation = {
-  opacity: 0,
-  animation: 'fadeIn 0.8s ease-out forwards',
-};
+// Feature Card Component
+const FeatureCard = ({ icon, title, description, gradient, delay = 0, features = [] }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const cardRef = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
 
-const slideUpAnimation = {
-  transform: 'translateY(20px)',
-  opacity: 0,
-  animation: 'slideUp 0.8s ease-out forwards',
-};
-
-// Stats data
-const stats = [
-  { number: 5000, label: 'Active Users' },
-  { number: 25000, label: 'Quizzes Generated' },
-  { number: 15000, label: 'PDFs Analyzed' },
-  { number: 95, label: 'Satisfaction Rate' },
-];
-
-// Testimonials data
-const testimonials = [
-  {
-    quote: "QuizHive.ai transformed my study routine. The AI tutor is like having a personal teacher available 24/7.",
-    author: "Sarah K.",
-    role: "Medical Student"
-  },
-  {
-    quote: "The quiz generation feature helped me prepare for my exams more effectively than ever before.",
-    author: "David M.",
-    role: "Engineering Student"
-  },
-  {
-    quote: "The analytics dashboard gives me clear insights into my progress. It's incredibly motivating!",
-    author: "Lisa R.",
-    role: "Graduate Student"
-  }
-];
-
-export default function Home() {
-  // Theme colors
-  const theme = {
-    bg: 'linear-gradient(140deg, #0f172a 0%, #1e1b4b 100%)',
-    cardBg: 'rgba(30,34,48,0.95)',
-    accent: '#7c3aed',
-    accent2: '#10b981',
-    muted: '#94a3b8',
-    border: '1px solid rgba(148,163,184,0.1)',
-    glow: '0 0 15px rgba(124,58,237,0.3)',
-    cardShadow: '0 4px 20px rgba(0,0,0,0.2)',
-  };
-  // Animation style for staggered fade-in
-  const getDelayStyle = (delay) => ({
-    opacity: 0,
-    animation: `fadeIn 0.8s ease-out ${delay}s forwards`
-  });
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setIsVisible(true);
+      },
+      { threshold: 0.2 }
+    );
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="home-landing" style={{ 
-      minHeight: '100vh', 
-      background: theme.bg, 
-      padding: 0,
-      position: 'relative',
-      overflow: 'auto',
-      width: '100%',
-      height: '100%'
-    }}>
+    <div
+      ref={cardRef}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        background: `linear-gradient(135deg, ${gradient[0]} 0%, ${gradient[1]} 100%)`,
+        borderRadius: 24,
+        padding: 40,
+        position: 'relative',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        opacity: 1,
+        transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+        transitionDelay: `${delay}ms`,
+        boxShadow: isHovered
+          ? `0 20px 60px rgba(124, 58, 237, 0.4), 0 0 40px rgba(124, 58, 237, 0.2)`
+          : '0 10px 40px rgba(0, 0, 0, 0.3)',
+        transform: isHovered ? 'translateY(-8px) scale(1.02)' : 'translateY(0) scale(1)',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          top: -50,
+          right: -50,
+          width: 200,
+          height: 200,
+          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
+          borderRadius: '50%',
+          filter: 'blur(40px)',
+          transition: 'all 0.3s ease',
+          transform: isHovered ? 'scale(1.5)' : 'scale(1)',
+        }}
+      />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ fontSize: 56, marginBottom: 20, display: 'inline-block' }}>
+          <FloatingElement delay={delay * 0.1}>{icon}</FloatingElement>
+        </div>
+        <h3
+          style={{
+            fontSize: 24,
+            fontWeight: 700,
+            color: '#fff',
+            margin: '0 0 12px 0',
+            letterSpacing: '-0.5px',
+          }}
+        >
+          {title}
+        </h3>
+        <p
+          style={{
+            fontSize: 16,
+            color: 'rgba(255, 255, 255, 0.9)',
+            lineHeight: 1.6,
+            margin: '0 0 20px 0',
+          }}
+        >
+          {description}
+        </p>
+        {features.length > 0 && (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {features.map((feature, idx) => (
+              <li
+                key={idx}
+                style={{
+                  color: 'rgba(255, 255, 255, 0.85)',
+                  fontSize: 14,
+                  marginBottom: 8,
+                  paddingLeft: 24,
+                  position: 'relative',
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                  }}
+                >
+                  ✓
+                </span>
+                {feature}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Testimonial Card Component
+const TestimonialCard = ({ quote, author, role, avatar, delay = 0 }) => {
+  const cardRef = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setIsVisible(true);
+      },
+      { threshold: 0.3 }
+    );
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={cardRef}
+      style={{
+        background: 'rgba(30, 34, 48, 0.8)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: 20,
+        padding: 32,
+        border: '1px solid rgba(124, 156, 255, 0.2)',
+        transform: isVisible ? 'translateY(0)' : 'translateY(30px)',
+        opacity: isVisible ? 1 : 0,
+        transition: 'all 0.6s ease',
+        transitionDelay: `${delay}ms`,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div style={{ fontSize: 32, marginBottom: 16, opacity: 0.7 }}>"</div>
+      <p
+        style={{
+          color: '#fff',
+          fontSize: 16,
+          lineHeight: 1.7,
+          flex: 1,
+          margin: '0 0 24px 0',
+        }}
+      >
+        {quote}
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: '50%',
+            background: `linear-gradient(135deg, #7c3aed 0%, #10b981 100%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 20,
+            fontWeight: 700,
+            color: '#fff',
+          }}
+        >
+          {avatar || author.charAt(0)}
+        </div>
+        <div>
+          <div style={{ color: '#fff', fontWeight: 600, fontSize: 15 }}>{author}</div>
+          <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 13, marginTop: 2 }}>
+            {role}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+export default function Home() {
+  const navigate = useNavigate();
+  const { user, isGuestMode } = useAuth();
+
+  const features = [
+    {
+      icon: '📚',
+      title: 'Smart PDF Analysis',
+      description: 'Upload your study materials and get instant AI-powered analysis, summaries, and intelligent topic extraction.',
+      gradient: ['rgba(124, 58, 237, 0.8)', 'rgba(139, 92, 246, 0.6)'],
+      features: ['Automatic topic extraction', 'Page-by-page analysis', 'Smart summarization'],
+    },
+    {
+      icon: '🤖',
+      title: 'AI Tutor Chat',
+      description: 'Chat with Gini, your personal AI tutor. Get contextual answers with citations and follow-up explanations.',
+      gradient: ['rgba(16, 185, 129, 0.8)', 'rgba(5, 150, 105, 0.6)'],
+      features: ['Context-aware responses', 'Source citations', 'Multi-turn conversations'],
+    },
+    {
+      icon: '📝',
+      title: 'Custom Quiz Generation',
+      description: 'Create tailored quizzes from your content. Generate MCQs, SAQs, LAQs, and one-word questions with detailed scoring.',
+      gradient: ['rgba(59, 130, 246, 0.8)', 'rgba(37, 99, 235, 0.6)'],
+      features: ['Multiple question types', 'Difficulty levels', 'Topic-based quizzes'],
+    },
+    {
+      icon: '📊',
+      title: 'Progress Analytics',
+      description: 'Track your learning journey with comprehensive analytics. Monitor performance, identify strengths and weaknesses.',
+      gradient: ['rgba(236, 72, 153, 0.8)', 'rgba(219, 39, 119, 0.6)'],
+      features: ['Performance metrics', 'Progress tracking', 'Personalized insights'],
+    },
+    {
+      icon: '📺',
+      title: 'YouTube Recommendations',
+      description: 'Get curated video recommendations based on your study content. Learn from the best educational resources.',
+      gradient: ['rgba(245, 158, 11, 0.8)', 'rgba(217, 119, 6, 0.6)'],
+      features: ['Content-based matching', 'Quality filtering', 'Relevant suggestions'],
+    },
+    {
+      icon: '📓',
+      title: 'Digital Notebook',
+      description: 'Take notes, create study guides, and organize your learning materials all in one place.',
+      gradient: ['rgba(168, 85, 247, 0.8)', 'rgba(147, 51, 234, 0.6)'],
+      features: ['Rich text editing', 'Auto-save', 'Organized notes'],
+    },
+  ];
+
+  const testimonials = [
+    {
+      quote: 'QuizHive.ai transformed my study routine. The AI tutor is like having a personal teacher available 24/7. The quiz generation feature helped me ace my exams!',
+      author: 'Sarah K.',
+      role: 'Medical Student',
+      avatar: 'SK',
+    },
+    {
+      quote: 'The progress analytics are incredible. I can see exactly where I need to improve, and the personalized recommendations make studying so much more efficient.',
+      author: 'David M.',
+      role: 'Engineering Student',
+      avatar: 'DM',
+    },
+    {
+      quote: 'As a graduate student, I love how I can upload research papers and get instant summaries and quiz questions. It saves me hours of work!',
+      author: 'Lisa R.',
+      role: 'Graduate Student',
+      avatar: 'LR',
+    },
+  ];
+
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0b1020 0%, #1e1b4b 50%, #0f172a 100%)',
+        position: 'relative',
+        overflow: 'visible',
+        width: '100%',
+      }}
+    >
       <style>
         {`
-          html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow-y: auto;
-          }
-          .home-landing {
-            -webkit-overflow-scrolling: touch;
-          }
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-          @keyframes slideUp {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+          @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
           }
           @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
           }
-          .hero-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: ${theme.glow};
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
           }
-          .feature-card {
-            transition: all 0.3s ease;
-          }
-          .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: ${theme.glow};
+          @keyframes slideInUp {
+            from {
+              opacity: 0;
+              transform: translateY(30px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
           }
         `}
       </style>
 
-      {/* HERO SECTION */}
-      <section style={{
-        width: '100%',
-        minHeight: '90vh',
-        background: `radial-gradient(circle at 50% 50%, ${theme.accent}20 0%, transparent 50%)`,
-        color: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflowX: 'hidden',
-        overflowY: 'visible',
-        padding: '80px 20px',
-      }}>
-        <div style={{ ...getDelayStyle(0.2), maxWidth: 1200, width: '100%', textAlign: 'center' }}>
-          <h1 style={{ 
-            fontSize: 'clamp(2.5em, 5vw, 4em)',
-            fontWeight: 900,
-            margin: 0,
-            letterSpacing: '-1px',
-            lineHeight: 1.1,
-            background: `linear-gradient(135deg, #fff 0%, #e2e8f0 100%)`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>
-            Transform Your Learning Journey<br/>with AI-Powered Education
+      {/* Animated Background Elements */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            width: 600,
+            height: 600,
+            background: 'radial-gradient(circle, rgba(124, 58, 237, 0.15) 0%, transparent 70%)',
+            borderRadius: '50%',
+            top: '-300px',
+            left: '-300px',
+            animation: 'float 20s ease-in-out infinite',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            width: 500,
+            height: 500,
+            background: 'radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%)',
+            borderRadius: '50%',
+            bottom: '-250px',
+            right: '-250px',
+            animation: 'float 15s ease-in-out infinite reverse',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            width: 400,
+            height: 400,
+            background: 'radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%)',
+            borderRadius: '50%',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            animation: 'pulse 8s ease-in-out infinite',
+          }}
+        />
+      </div>
+
+      {/* Hero Section */}
+      <section
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '120px 20px 80px',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div style={{ maxWidth: 1200, width: '100%', textAlign: 'center' }}>
+          {/* Main Heading */}
+          <h1
+            style={{
+              fontSize: 'clamp(3rem, 8vw, 5.5rem)',
+              fontWeight: 900,
+              margin: '0 0 24px 0',
+              letterSpacing: '-2px',
+              lineHeight: 1.1,
+              background: 'linear-gradient(135deg, #ffffff 0%, #aab2d5 50%, #7c3aed 100%)',
+              backgroundSize: '200% 200%',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              animation: 'gradient 5s ease infinite',
+            }}
+          >
+            Transform Your Learning
+            <br />
+            <span style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #10b981 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              with AI Power
+            </span>
           </h1>
-          <p style={{ 
-            fontSize: 'clamp(1.1em, 2vw, 1.4em)',
-            fontWeight: 400,
-            margin: '24px auto 0 auto',
-            maxWidth: 700,
-            color: theme.muted,
-            lineHeight: 1.6,
-          }}>
-            Experience a revolutionary approach to studying with QuizHive.ai. 
-            Our platform combines AI tutoring, smart quiz generation, and 
-            comprehensive analytics to optimize your learning process.
+
+          <p
+            style={{
+              fontSize: 'clamp(1.1rem, 2.5vw, 1.5rem)',
+              fontWeight: 400,
+              margin: '0 auto 48px',
+              maxWidth: 800,
+              color: 'rgba(255, 255, 255, 0.8)',
+              lineHeight: 1.7,
+            }}
+          >
+            Experience the future of education with QuizHive.ai. Upload PDFs, chat with your AI tutor,
+            generate custom quizzes, and track your progress—all powered by cutting-edge AI technology.
           </p>
-          
-          <div style={{ marginTop: 48, display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <Link to="/study" style={{ textDecoration: 'none', ...getDelayStyle(0.6) }}>
-              <button className="hero-btn" style={{
-                padding: '18px 40px',
-                fontSize: '1.2em',
-                fontWeight: 700,
-                borderRadius: 12,
-                background: theme.accent,
-                color: '#fff',
-                border: 'none',
-                boxShadow: theme.cardShadow,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-              }}>
-                <span role="img" aria-label="study">🚀</span> Get Started
-              </button>
-            </Link>
-            <Link to="/dashboard" style={{ textDecoration: 'none', ...getDelayStyle(0.8) }}>
-              <button className="hero-btn" style={{
-                padding: '18px 40px',
-                fontSize: '1.2em',
-                fontWeight: 700,
-                borderRadius: 12,
-                background: 'transparent',
-                color: '#fff',
-                border: `2px solid ${theme.accent}`,
-                boxShadow: theme.cardShadow,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-              }}>
-                <span role="img" aria-label="demo">🎮</span> Try Demo
-              </button>
-            </Link>
+
+          {/* CTA Buttons */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 20,
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              marginBottom: 40,
+            }}
+          >
+            {user || isGuestMode ? (
+              <Link to="/study" style={{ textDecoration: 'none' }}>
+                <button
+                  style={{
+                    padding: '20px 48px',
+                    fontSize: '1.2rem',
+                    fontWeight: 700,
+                    borderRadius: 16,
+                    background: 'linear-gradient(135deg, #7c3aed 0%, #10b981 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 10px 40px rgba(124, 58, 237, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                    e.currentTarget.style.boxShadow = '0 15px 50px rgba(124, 58, 237, 0.5)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 10px 40px rgba(124, 58, 237, 0.4)';
+                  }}
+                >
+                  <span>🚀</span> Go to Study Space
+                </button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/auth" style={{ textDecoration: 'none' }}>
+                  <button
+                    style={{
+                      padding: '20px 48px',
+                      fontSize: '1.2rem',
+                      fontWeight: 700,
+                      borderRadius: 16,
+                      background: 'linear-gradient(135deg, #7c3aed 0%, #10b981 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 10px 40px rgba(124, 58, 237, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-3px)';
+                      e.currentTarget.style.boxShadow = '0 15px 50px rgba(124, 58, 237, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 10px 40px rgba(124, 58, 237, 0.4)';
+                    }}
+                  >
+                    <span>✨</span> Get Started Free
+                  </button>
+                </Link>
+                <button
+                  onClick={() => navigate('/auth')}
+                  style={{
+                    padding: '20px 48px',
+                    fontSize: '1.2rem',
+                    fontWeight: 700,
+                    borderRadius: 16,
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    backdropFilter: 'blur(10px)',
+                    color: '#fff',
+                    border: '2px solid rgba(124, 156, 255, 0.5)',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                    e.currentTarget.style.borderColor = 'rgba(124, 156, 255, 0.8)';
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.borderColor = 'rgba(124, 156, 255, 0.5)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  <span>👤</span> Try as Guest
+                </button>
+              </>
+            )}
           </div>
+
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section
+        style={{
+          padding: '120px 20px',
+          maxWidth: 1400,
+          margin: '0 auto',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: 80 }}>
+          <h2
+            style={{
+              fontSize: 'clamp(2.5rem, 5vw, 3.5rem)',
+              fontWeight: 800,
+              color: '#fff',
+              margin: '0 0 20px 0',
+              letterSpacing: '-1px',
+            }}
+          >
+            Everything You Need to{' '}
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #7c3aed 0%, #10b981 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Excel
+            </span>
+          </h2>
+          <p
+            style={{
+              fontSize: '1.2rem',
+              color: 'rgba(255, 255, 255, 0.7)',
+              maxWidth: 600,
+              margin: '0 auto',
+            }}
+          >
+            Powerful features designed to make your learning journey efficient, engaging, and effective
+          </p>
         </div>
 
-        {/* Stats Section */}
-        <div style={{
-          marginTop: 80,
-          width: '100%',
-          maxWidth: 1200,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 32,
-          padding: '0 20px',
-          ...getDelayStyle(1),
-        }}>
-          {stats.map((stat, index) => (
-            <div key={index} style={{
-              background: theme.cardBg,
-              borderRadius: 16,
-              padding: 24,
-              textAlign: 'center',
-              border: theme.border,
-            }}>
-              <div style={{ fontSize: '2.5em', fontWeight: 800, color: theme.accent }}>
-                <AnimatedCounter end={stat.number} />
-              </div>
-              <div style={{ color: theme.muted, marginTop: 8 }}>{stat.label}</div>
-            </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+            gap: 32,
+          }}
+        >
+          {features.map((feature, index) => (
+            <FeatureCard key={index} {...feature} delay={index * 100} />
           ))}
         </div>
       </section>
 
-      {/* Benefits Section */}
-      <section style={{
-        padding: '100px 20px',
-        background: `linear-gradient(180deg, ${theme.cardBg} 0%, transparent 100%)`,
-        position: 'relative',
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{
-            fontSize: 'clamp(2em, 3vw, 2.5em)',
-            fontWeight: 800,
-            color: '#fff',
-            marginBottom: 64,
-            ...getDelayStyle(1.2),
-          }}>
-            Why Choose QuizHive.ai?
-          </h2>
-          
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: 40,
-            ...getDelayStyle(1.4),
-          }}>
-            <BenefitCard
-              icon="🎯"
-              title="Personalized Learning"
-              desc="AI-powered system adapts to your learning style and pace"
-              theme={theme}
-            />
-            <BenefitCard
-              icon="⚡"
-              title="Instant Feedback"
-              desc="Get immediate responses and detailed explanations"
-              theme={theme}
-            />
-            <BenefitCard
-              icon="📊"
-              title="Progress Tracking"
-              desc="Monitor your improvement with detailed analytics"
-              theme={theme}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Features Grid */}
-      <section style={{
-        padding: '80px 20px',
-        maxWidth: 1200,
-        margin: '0 auto',
-        position: 'relative',
-      }}>
-        <h2 style={{
-          fontSize: 'clamp(2em, 3vw, 2.5em)',
-          fontWeight: 800,
-          color: '#fff',
-          textAlign: 'center',
-          marginBottom: 64,
-          ...getDelayStyle(1.6),
-        }}>
-          Powerful Features for Enhanced Learning
-        </h2>
-        
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: 40,
-          ...getDelayStyle(1.8),
-        }}>
-          <FeatureCard
-            icon="📚"
-            title="Smart PDF Analysis"
-            desc="Upload your study materials and get instant AI-powered analysis, summaries, and topic extraction."
-            theme={theme}
-          />
-          <FeatureCard
-            icon="🤖"
-            title="AI Tutor Chat"
-            desc="Chat with Gini, your personal AI tutor. Get contextual answers and follow-up explanations with citations."
-            theme={theme}
-          />
-          <FeatureCard
-            icon="📝"
-            title="Custom Quiz Generation"
-            desc="Create tailored MCQs, SAQs, and LAQs from your content. Practice effectively and track your progress."
-            theme={theme}
-          />
-        </div>
-      </section>
-
       {/* Testimonials Section */}
-      <section style={{
-        padding: '100px 20px',
-        background: `linear-gradient(180deg, transparent 0%, ${theme.cardBg} 50%, transparent 100%)`,
-      }}>
+      <section
+        style={{
+          padding: '120px 20px',
+          background: 'linear-gradient(180deg, transparent 0%, rgba(30, 34, 48, 0.5) 50%, transparent 100%)',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <h2 style={{
-            fontSize: 'clamp(2em, 3vw, 2.5em)',
-            fontWeight: 800,
-            color: '#fff',
-            textAlign: 'center',
-            marginBottom: 64,
-            ...getDelayStyle(2),
-          }}>
-            What Our Users Say
-          </h2>
-          
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: 40,
-            ...getDelayStyle(2.2),
-          }}>
+          <div style={{ textAlign: 'center', marginBottom: 80 }}>
+            <h2
+              style={{
+                fontSize: 'clamp(2.5rem, 5vw, 3.5rem)',
+                fontWeight: 800,
+                color: '#fff',
+                margin: '0 0 20px 0',
+                letterSpacing: '-1px',
+              }}
+            >
+              Loved by{' '}
+              <span
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #10b981 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                Thousands
+              </span>
+            </h2>
+            <p
+              style={{
+                fontSize: '1.2rem',
+                color: 'rgba(255, 255, 255, 0.7)',
+                maxWidth: 600,
+                margin: '0 auto',
+              }}
+            >
+              See what students are saying about their learning experience
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+              gap: 32,
+            }}
+          >
             {testimonials.map((testimonial, index) => (
-              <TestimonialCard key={index} {...testimonial} theme={theme} />
+              <TestimonialCard key={index} {...testimonial} delay={index * 150} />
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section style={{
-        padding: '80px 20px',
-        textAlign: 'center',
-        ...getDelayStyle(2.4),
-      }}>
-        <h2 style={{
-          fontSize: 'clamp(1.8em, 2.5vw, 2.2em)',
-          fontWeight: 800,
-          color: '#fff',
-          marginBottom: 24,
-        }}>
-          Ready to Transform Your Learning Experience?
-        </h2>
-        <p style={{
-          fontSize: '1.2em',
-          color: theme.muted,
-          marginBottom: 40,
-          maxWidth: 600,
-          margin: '0 auto 40px auto',
-        }}>
-          Join thousands of students who are already learning smarter with QuizHive.ai
-        </p>
-        
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link to="/auth" style={{ textDecoration: 'none' }}>
-            <button className="hero-btn" style={{
-              padding: '18px 40px',
-              fontSize: '1.2em',
-              fontWeight: 700,
-              borderRadius: 12,
-              background: theme.accent,
+      {/* Final CTA Section */}
+      <section
+        style={{
+          padding: '120px 20px',
+          textAlign: 'center',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+          <h2
+            style={{
+              fontSize: 'clamp(2.5rem, 5vw, 3.5rem)',
+              fontWeight: 800,
               color: '#fff',
-              border: 'none',
-              boxShadow: theme.cardShadow,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-            }}>
-              <span role="img" aria-label="login">🔑</span> Get Started Free
+              margin: '0 0 24px 0',
+              letterSpacing: '-1px',
+            }}
+          >
+            Ready to Transform Your Learning?
+          </h2>
+          <p
+            style={{
+              fontSize: '1.2rem',
+              color: 'rgba(255, 255, 255, 0.7)',
+              margin: '0 0 48px 0',
+              lineHeight: 1.7,
+            }}
+          >
+            Join thousands of students who are already learning smarter with QuizHive.ai. Start your
+            journey today—it's free to get started!
+          </p>
+          <Link to={user || isGuestMode ? '/study' : '/auth'} style={{ textDecoration: 'none' }}>
+            <button
+              style={{
+                padding: '20px 48px',
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                borderRadius: 16,
+                background: 'linear-gradient(135deg, #7c3aed 0%, #10b981 100%)',
+                color: '#fff',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 10px 40px rgba(124, 58, 237, 0.4)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-3px) scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 15px 50px rgba(124, 58, 237, 0.5)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                e.currentTarget.style.boxShadow = '0 10px 40px rgba(124, 58, 237, 0.4)';
+              }}
+            >
+              <span>🚀</span> Start Learning Now
             </button>
           </Link>
         </div>
       </section>
 
       {/* Footer */}
-      <footer style={{
-        textAlign: 'center',
-        padding: '40px 20px',
-        color: theme.muted,
-        borderTop: theme.border,
-        ...getDelayStyle(2.6),
-      }}>
+      <footer
+        style={{
+          padding: '60px 20px 40px',
+          borderTop: '1px solid rgba(124, 156, 255, 0.2)',
+          textAlign: 'center',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{ marginBottom: 20 }}>
-            <Link to="/about" style={{ color: theme.muted, textDecoration: 'none', marginRight: 20 }}>About</Link>
-            <Link to="/privacy" style={{ color: theme.muted, textDecoration: 'none', marginRight: 20 }}>Privacy</Link>
-            <Link to="/terms" style={{ color: theme.muted, textDecoration: 'none', marginRight: 20 }}>Terms</Link>
-            <Link to="/contact" style={{ color: theme.muted, textDecoration: 'none' }}>Contact</Link>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 32,
+              marginBottom: 32,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Link
+              to="/dashboard"
+              style={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                textDecoration: 'none',
+                fontSize: 14,
+                transition: 'color 0.2s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)')}
+            >
+              Dashboard
+            </Link>
+            <Link
+              to="/study"
+              style={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                textDecoration: 'none',
+                fontSize: 14,
+                transition: 'color 0.2s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)')}
+            >
+              Study Space
+            </Link>
           </div>
-          <div>
-            &copy; {new Date().getFullYear()} QuizHive.ai &mdash; Empowering Smarter Learning
+          <div style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 14 }}>
+            © {new Date().getFullYear()} QuizHive.ai — Empowering Smarter Learning
           </div>
         </div>
       </footer>
     </div>
   );
 }
-
-function FeatureCard({ icon, title, desc, theme }) {
-  return (
-    <div className="feature-card" style={{
-      background: theme.cardBg,
-      borderRadius: 20,
-      padding: '40px 32px',
-      textAlign: 'center',
-      boxShadow: theme.cardShadow,
-      border: theme.border,
-      transition: 'all 0.3s ease',
-    }}>
-      <div style={{ fontSize: '3em', marginBottom: 16 }}>{icon}</div>
-      <h3 style={{
-        margin: '0 0 12px 0',
-        color: '#fff',
-        fontWeight: 700,
-        fontSize: '1.3em',
-      }}>
-        {title}
-      </h3>
-      <p style={{
-        color: theme.muted,
-        fontSize: '1.05em',
-        lineHeight: 1.6,
-        margin: 0,
-      }}>
-        {desc}
-      </p>
-    </div>
-  );
-}
-
-function BenefitCard({ icon, title, desc, theme }) {
-  return (
-    <div style={{
-      background: theme.cardBg,
-      borderRadius: 20,
-      padding: 32,
-      textAlign: 'left',
-      border: theme.border,
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: 20,
-    }}>
-      <div style={{ fontSize: '2em' }}>{icon}</div>
-      <div>
-        <h3 style={{
-          margin: '0 0 8px 0',
-          color: '#fff',
-          fontWeight: 700,
-          fontSize: '1.2em',
-        }}>
-          {title}
-        </h3>
-        <p style={{
-          color: theme.muted,
-          fontSize: '1em',
-          lineHeight: 1.6,
-          margin: 0,
-        }}>
-          {desc}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function TestimonialCard({ quote, author, role, theme }) {
-  return (
-    <div style={{
-      background: theme.cardBg,
-      borderRadius: 20,
-      padding: 32,
-      border: theme.border,
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      <div style={{
-        color: theme.muted,
-        fontSize: '2em',
-        marginBottom: 16,
-      }}>
-        "
-      </div>
-      <p style={{
-        color: '#fff',
-        fontSize: '1.1em',
-        lineHeight: 1.6,
-        flex: 1,
-        marginBottom: 24,
-      }}>
-        {quote}
-      </p>
-      <div>
-        <div style={{ color: '#fff', fontWeight: 600 }}>{author}</div>
-        <div style={{ color: theme.muted, fontSize: '0.9em', marginTop: 4 }}>{role}</div>
-      </div>
-    </div>
-  );
-}
-

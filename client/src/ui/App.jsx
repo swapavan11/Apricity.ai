@@ -20,6 +20,8 @@ function AppContent() {
   const [selected, setSelected] = useState("all");
   const location = useLocation();
   const isHomePage = location.pathname === "/";
+  const isStudyPage = location.pathname === "/study";
+  const isDashboardPage = location.pathname === "/dashboard";
   const isOAuthCallback = location.pathname.startsWith('/auth/callback');
   const isVerifyEmail = location.pathname.startsWith('/verify-email');
   const isResetPassword = location.pathname.startsWith('/reset-password');
@@ -313,7 +315,13 @@ function AppContent() {
   {profileOpen && <ProfileModal open={profileOpen} onClose={()=>setProfileOpen(false)} themePref={themePref} setThemePref={setThemePref} />}
 
       {/* 🔹 Main Content */}
-      <div className="content" style={{ height: "calc(100vh - 60px)" }}>
+      <div 
+        className="content" 
+        style={{ 
+          height: "calc(100vh - 60px)", 
+          overflow: (isStudyPage || isDashboardPage) ? "hidden" : "auto"
+        }}
+      >
         <div style={{ height: "100%" }}>
           <Routes>
             <Route path="/" element={<Home />} />

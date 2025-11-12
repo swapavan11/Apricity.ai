@@ -19,23 +19,39 @@ export default function Dashboard() {
     setError(null)
     try {
       const token = localStorage.getItem('token');
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       
       // Invalidate cache first to get fresh data
-      await fetch('/api/progress/invalidate', { 
+      const invalidateRes = await fetch(`${apiBase}/api/progress/invalidate`, { 
         method: 'POST',
-        headers 
+        headers,
+        credentials: 'include'
       });
+      if (!invalidateRes.ok) {
+        const errorText = await invalidateRes.text();
+        console.warn('Cache invalidation failed:', errorText);
+      }
       
       // Now fetch fresh data
-      const response = await fetch('/api/progress', { headers });
-      if (!response.ok) throw new Error('Failed to load progress data');
+      const response = await fetch(`${apiBase}/api/progress`, { 
+        headers,
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        // Check if response is HTML (error page)
+        if (errorText.trim().startsWith('<!')) {
+          throw new Error('Server returned HTML instead of JSON. Check API endpoint configuration.');
+        }
+        throw new Error(`Failed to load progress data: ${response.status}`);
+      }
       const result = await response.json();
       setData(result);
       setLastRefresh(new Date());
     } catch (err) {
       console.error('Dashboard error:', err);
-      setError(err.message);
+      setError(err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
