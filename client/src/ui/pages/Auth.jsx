@@ -63,7 +63,11 @@ const Auth = () => {
   // Redirect if already logged in or in guest mode
   useEffect(() => {
     if ((user || isGuestMode) && !loading) {
-      navigate('/');
+      // If we're on the auth page or landed on home, send users to the study space
+      const cur = window.location.pathname || '/';
+      if (cur === '/' || cur.startsWith('/auth')) {
+        navigate('/study');
+      }
     }
   }, [user, loading, isGuestMode, navigate]);
 
