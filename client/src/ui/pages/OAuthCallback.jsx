@@ -23,8 +23,15 @@ const OAuthCallback = () => {
         setTimeout(() => navigate('/auth?mode=auth'), 1500);
         return;
       }
-
+      // If token exists in query (legacy flow), pass it. Otherwise attempt cookie-based finalization.
       const result = await completeOAuthLogin(token);
+      // Remove token from URL to avoid leakage
+      try {
+        if (token) {
+          const cleanUrl = window.location.pathname + (statusParam ? `?status=${encodeURIComponent(statusParam)}` : '');
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      } catch (e) {}
       if (result.success) {
         navigate('/study');
       } else {

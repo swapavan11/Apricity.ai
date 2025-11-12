@@ -501,7 +501,18 @@ router.get('/google/callback',
       const token = generateToken(req.user._id);
       // Try to extract status info from passport auth (if available on req.authInfo)
       const status = req.authInfo?.status || 'returning';
-      res.redirect(`${config.FRONTEND_URL}/auth/callback?token=${token}&status=${encodeURIComponent(status)}`);
+      // Set JWT as an HttpOnly cookie so frontend does not need the token in the URL
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        // If frontend and backend are on different top-level domains, you may need 'none' and HTTPS
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days; tune as needed
+      };
+
+      res.cookie('token', token, cookieOptions);
+      // Redirect to frontend callback without exposing token in URL
+      res.redirect(`${config.FRONTEND_URL}/auth/callback?status=${encodeURIComponent(status)}`);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
       res.redirect(`${config.FRONTEND_URL}/auth?mode=auth&error=oauth_callback_failed`);

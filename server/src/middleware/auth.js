@@ -6,7 +6,14 @@ import { config } from '../lib/config.js';
 export const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    // If no Authorization header, attempt to read token from cookie header
+    if (!token && req.headers && req.headers.cookie) {
+      const cookieHeader = req.headers.cookie; // e.g. "token=abc; other=val"
+      const match = cookieHeader.split(';').map(s => s.trim()).find(s => s.startsWith('token='));
+      if (match) token = match.split('=')[1];
+    }
 
     if (!token) {
       return res.status(401).json({ 
@@ -53,8 +60,16 @@ export const authenticateToken = async (req, res, next) => {
 // Optional authentication (doesn't fail if no token)
 export const optionalAuth = async (req, res, next) => {
   try {
+    let token;
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    if (authHeader) token = authHeader.split(' ')[1];
+
+    // Try cookie if header missing
+    if (!token && req.headers && req.headers.cookie) {
+      const cookieHeader = req.headers.cookie;
+      const match = cookieHeader.split(';').map(s => s.trim()).find(s => s.startsWith('token='));
+      if (match) token = match.split('=')[1];
+    }
 
     if (token) {
       const decoded = jwt.verify(token, config.JWT_SECRET);

@@ -24,6 +24,8 @@ export const AuthProvider = ({ children }) => {
     } else {
       delete axios.defaults.headers.common['Authorization'];
     }
+    // Ensure axios sends cookies for cross-origin requests (for cookie-based auth)
+    axios.defaults.withCredentials = true;
   }, [token]);
 
   // Load user on mount
@@ -52,23 +54,27 @@ export const AuthProvider = ({ children }) => {
   // Complete OAuth login by accepting a token from a redirect/callback
   const completeOAuthLogin = async (incomingToken) => {
     try {
-      if (!incomingToken) throw new Error('Missing token');
-      // Persist token and set axios header immediately
-      localStorage.setItem('token', incomingToken);
-      setToken(incomingToken);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${incomingToken}`;
+      // If a token is passed in the URL (legacy / quick flow), persist it and set header
+      if (incomingToken) {
+        localStorage.setItem('token', incomingToken);
+        setToken(incomingToken);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${incomingToken}`;
+      }
 
-      // Fetch profile so UI updates without a full page reload
+      // Whether we have a token in storage or an HttpOnly cookie on the backend,
+      // request the profile so the UI can be updated.
       const response = await axios.get('/api/auth/profile');
       setUser(response.data.user);
       setIsGuestMode(false);
       return { success: true };
     } catch (error) {
-      // If anything fails, clear token state
+      // If anything fails, clear token state (only if we set it locally earlier)
       console.error('OAuth completion failed:', error);
-      localStorage.removeItem('token');
-      setToken(null);
-      delete axios.defaults.headers.common['Authorization'];
+      if (incomingToken) {
+        localStorage.removeItem('token');
+        setToken(null);
+        delete axios.defaults.headers.common['Authorization'];
+      }
       return { 
         success: false, 
         message: error.response?.data?.message || error.message || 'OAuth login failed' 
