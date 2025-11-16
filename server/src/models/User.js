@@ -1,6 +1,125 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// Study Companion nested schemas
+const shortTermActionSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: true
+  },
+  deadline: {
+    type: Date,
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const studySessionSchema = new mongoose.Schema({
+  startTime: {
+    type: Date,
+    required: true
+  },
+  endTime: {
+    type: Date,
+    required: true
+  },
+  duration: {
+    type: Number, // seconds
+    required: true
+  },
+  mode: {
+    type: String,
+    enum: ['timer', 'stopwatch'],
+    required: true
+  },
+  date: {
+    type: String, // YYYY-MM-DD format for easy querying
+    required: true
+  }
+});
+
+const taskBlockSchema = new mongoose.Schema({
+  date: {
+    type: String, // YYYY-MM-DD
+    required: true
+  },
+  startTime: {
+    type: String, // HH:mm
+    required: true
+  },
+  endTime: {
+    type: String, // HH:mm
+    required: true
+  },
+  title: {
+    type: String,
+    required: true
+  },
+  color: {
+    type: String,
+    default: '#4facfe'
+  },
+  link: {
+    type: String,
+    default: null
+  }
+});
+
+const todoSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: true
+  },
+  completed: {
+    type: Boolean,
+    default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const studyCompanionSchema = new mongoose.Schema({
+  ultimateGoal: {
+    type: String,
+    default: ''
+  },
+  shortTermActions: [shortTermActionSchema],
+  estimatedTime: {
+    hours: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    minutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 59
+    }
+  },
+  dailyCommitment: {
+    hours: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    minutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 59
+    }
+  },
+  studySessions: [studySessionSchema],
+  taskBlocks: [taskBlockSchema],
+  todos: [todoSchema]
+});
+
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
@@ -154,12 +273,22 @@ const userSchema = new mongoose.Schema({
     selectedTopics: [String], // Topics selected for mode 2
     customInstruction: String, // Custom instruction for mode 3
     createdAt: { type: Date, default: Date.now }
-  }]
+  }],
+  // Study Companion data
+  studyCompanion: {
+    type: studyCompanionSchema,
+    default: () => ({})
+  }
 }, {
   timestamps: true
 });
 
 // Note: index creation is handled via field options (unique/sparse). Avoid duplicate schema.index calls.
+
+// Add indexes for efficient querying on Study Companion date fields
+userSchema.index({ 'studyCompanion.studySessions.date': 1 });
+userSchema.index({ 'studyCompanion.taskBlocks.date': 1 });
+userSchema.index({ 'studyCompanion.shortTermActions.deadline': 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

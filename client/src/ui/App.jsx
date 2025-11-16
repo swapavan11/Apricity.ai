@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from "../components/AuthProvider.jsx";
 import Home from "./pages/Home.jsx";
 import Study from "../components/Study/Study.jsx"; // ✅ updated import (from components/Study)
 import Dashboard from "./pages/Dashboard.jsx";
+import StudyCompanion from "../components/StudyCompanion/StudyCompanion.jsx";
+import ErrorBoundary from "../components/StudyCompanion/ErrorBoundary.jsx";
 import Auth from "./pages/Auth.jsx";
 import "./styles.css"; // ✅ import theme styles once globally
 import useApi from '../api/useApi'
@@ -22,6 +24,7 @@ function AppContent() {
   const isHomePage = location.pathname === "/";
   const isStudyPage = location.pathname === "/study";
   const isDashboardPage = location.pathname === "/dashboard";
+  const isStudyCompanionPage = location.pathname === "/study-companion";
   const isOAuthCallback = location.pathname.startsWith('/auth/callback');
   const isVerifyEmail = location.pathname.startsWith('/verify-email');
   const isResetPassword = location.pathname.startsWith('/reset-password');
@@ -218,6 +221,9 @@ function AppContent() {
           <NavLink to="/dashboard" className="nav-link">
             Dashboard
           </NavLink>
+          <NavLink to="/study-companion" className="nav-link">
+            Study Companion
+          </NavLink>
 
           {/* 🔹 User Info */}
           <div
@@ -319,7 +325,7 @@ function AppContent() {
         className="content" 
         style={{ 
           height: "calc(100vh - 60px)", 
-          overflow: (isStudyPage || isDashboardPage) ? "hidden" : "auto"
+          overflow: (isStudyPage || isDashboardPage || isStudyCompanionPage) ? "hidden" : "auto"
         }}
       >
         <div style={{ height: "100%" }}>
@@ -329,6 +335,11 @@ function AppContent() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/study" element={<Study selected={selected} docs={docs} />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/study-companion" element={
+              <ErrorBoundary>
+                <StudyCompanion />
+              </ErrorBoundary>
+            } />
             <Route path="/auth/callback" element={<OAuthCallback />} />
             <Route path="*" element={<Home />} />
           </Routes>

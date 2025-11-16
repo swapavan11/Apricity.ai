@@ -273,6 +273,244 @@ export default function useApi() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${base}/api/notes/${id}`, { method: 'DELETE', headers });
       try { return await res.json(); } catch { return { success: false }; }
+    },
+
+    // Study Companion APIs
+    getStudyCompanion: async () => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/study-companion`, { headers });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    updateGoal: async (ultimateGoal) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/goal`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ ultimateGoal }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    updateTimeSettings: async (estimatedTime, dailyCommitment) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const body = {};
+      if (estimatedTime !== undefined) body.estimatedTime = estimatedTime;
+      if (dailyCommitment !== undefined) body.dailyCommitment = dailyCommitment;
+      
+      const res = await fetch(`${base}/api/study-companion/time-settings`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    // Study Companion Actions
+    createAction: async (text, deadline) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/actions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text, deadline }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    updateAction: async (actionId, text, deadline) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/actions/${actionId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ text, deadline }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    deleteAction: async (actionId) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/study-companion/actions/${actionId}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    // Study Sessions
+    recordStudySession: async (sessionData) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/sessions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(sessionData),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    getSessionsAggregate: async (startDate, endDate) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      const res = await fetch(`${base}/api/study-companion/sessions/aggregate?${params}`, { headers });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    // Task Blocks
+    createTaskBlock: async (taskData) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/task-blocks`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(taskData),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    updateTaskBlock: async (taskId, updates) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/task-blocks/${taskId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    deleteTaskBlock: async (taskId) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/study-companion/task-blocks/${taskId}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    // Todos
+    createTodo: async (text) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/todos`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    updateTodo: async (todoId, updates) => {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${base}/api/study-companion/todos/${todoId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
+
+    deleteTodo: async (todoId) => {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${base}/api/study-companion/todos/${todoId}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
     }
   }), [base]);
 }
