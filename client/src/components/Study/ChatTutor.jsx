@@ -117,17 +117,33 @@ export default function ChatTutor({
     // Set analyzing state for this specific message
     setAnalyzingMessageId(messageIndex);
     try {
-      // Get message ID from activeChat
-      const messageId = activeChat?.messages[messageIndex]?._id;
-      if (!messageId) {
+      // Get message ID from activeChat (use _id if available, otherwise use index)
+      const message = activeChat?.messages[messageIndex];
+      if (!message) {
         throw new Error('Message not found');
       }
       
+      // Use _id if available (for new messages), otherwise use index (for old messages)
+      const messageId = message._id || messageIndex.toString();
+      
+      console.log('Analyzing message:', { 
+        messageIndex, 
+        hasId: !!message._id, 
+        messageId,
+        textPreview: message.text.slice(0, 50) 
+      });
+      
       // Generate recommendations for this specific message
-      // Tab switching will be handled automatically by the parent after the API call completes
-      await generateChatVideoRecommendations(messageId);
+      // The parent component will handle tab switching after completion
+      const success = await generateChatVideoRecommendations(messageId);
+      
+      if (!success) {
+        // Show error if generation failed
+        // alert('Failed to generate video recommendations. Please try again.');
+      }
     } catch (error) {
       console.error('Error analyzing message:', error);
+      // alert('Failed to generate video recommendations. Please try again.');
     } finally {
       setAnalyzingMessageId(null);
     }
@@ -840,17 +856,8 @@ export default function ChatTutor({
       const lst = await api.listChats(selected === "all" ? null : selected);
       setChats(lst.chats || []);
 
-      // fetch YouTube recommendations
-      try {
-        const ytRes = await api.youtube(userQuestion, selected === "all" ? null : selected);
-        setYt(ytRes);
-      } catch {
-        setYt({
-          query: userQuestion,
-          suggestions: [],
-          error: "Failed to load YouTube recommendations.",
-        });
-      }
+      // DON'T auto-generate YouTube recommendations here
+      // User will click "Analyse & recommend YT video" button when they want recommendations
     } catch (err) {
       console.error("Ask error:", err);
       
@@ -1805,14 +1812,14 @@ export default function ChatTutor({
                     {/* Right side - YouTube analyze button */}
                     <button
                       onClick={() => handleAnalyzeForYouTube(m.text, idx)}
-                      disabled={generatingChatYt}
+                      disabled={analyzingMessageId === idx}
                       style={{
-                        background: generatingChatYt 
+                        background: analyzingMessageId === idx 
                           ? "linear-gradient(135deg, rgba(124, 156, 255, 0.3) 0%, rgba(90, 123, 216, 0.25) 100%)" 
                           : "linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(90, 123, 216, 0.1) 100%)",
                         border: "1px solid rgba(124, 156, 255, 0.3)",
-                        color: generatingChatYt ? "var(--accent)" : "#7c9cff",
-                        cursor: generatingChatYt ? "wait" : "pointer",
+                        color: analyzingMessageId === idx ? "var(--accent)" : "#7c9cff",
+                        cursor: analyzingMessageId === idx ? "wait" : "pointer",
                         display: "flex",
                         alignItems: "center",
                         gap: "6px",
@@ -1822,11 +1829,11 @@ export default function ChatTutor({
                         fontWeight: 600,
                         transition: "all 0.2s ease",
                         whiteSpace: "nowrap",
-                        backgroundSize: generatingChatYt ? "200% 200%" : "100% 100%",
-                        animation: generatingChatYt ? "gradientShift 2s ease infinite" : "none",
+                        backgroundSize: analyzingMessageId === idx ? "200% 200%" : "100% 100%",
+                        animation: analyzingMessageId === idx ? "gradientShift 2s ease infinite" : "none",
                       }}
                       onMouseEnter={(e) => {
-                        if (!generatingChatYt) {
+                        if (analyzingMessageId !== idx) {
                           e.currentTarget.style.background = "linear-gradient(135deg, rgba(124, 156, 255, 0.3) 0%, rgba(90, 123, 216, 0.25) 100%)";
                           e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.5)";
                           e.currentTarget.style.color = "#ffffff";
@@ -1834,7 +1841,7 @@ export default function ChatTutor({
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (!generatingChatYt) {
+                        if (analyzingMessageId !== idx) {
                           e.currentTarget.style.background = "linear-gradient(135deg, rgba(124, 156, 255, 0.15) 0%, rgba(90, 123, 216, 0.1) 100%)";
                           e.currentTarget.style.borderColor = "rgba(124, 156, 255, 0.3)";
                           e.currentTarget.style.color = "#7c9cff";
@@ -1843,7 +1850,7 @@ export default function ChatTutor({
                       }}
                       title="Analyze chat conversation and get YouTube video recommendations"
                     >
-                      {generatingChatYt ? (
+                      {analyzingMessageId === idx ? (
                         <>
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
                             <path d="M21 12a9 9 0 1 1-6.219-8.56" />

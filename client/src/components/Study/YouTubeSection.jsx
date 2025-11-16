@@ -44,26 +44,35 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
       triggerChatYt, 
       mode: yt?.mode, 
       hasMessageId: !!yt?.messageId,
-      hasRecommendations: !!yt?.recommendations 
+      hasRecommendations: !!yt?.recommendations,
+      hasError: !!yt?.error
     });
     
-    if (triggerChatYt > 0 && yt?.mode === 'chat' && yt?.messageId && yt?.recommendations) {
-      console.log('✅ All conditions met! Displaying recommendations');
-      console.log('📹 Video count:', yt.recommendations.suggestions?.length || 0);
+    if (triggerChatYt > 0 && yt?.mode === 'chat' && yt?.messageId && (yt?.recommendations || yt?.error)) {
+      console.log('✅ All conditions met! Displaying recommendations or error');
       
       // Switch to chat tab
       setYtTab('chat');
       console.log('🔄 Switched to "By Chat" tab');
       
-      // Store the recommendations for this message
-      setChatYt(prev => ({
-        ...prev,
-        [yt.messageId]: yt.recommendations
-      }));
-      console.log('💾 Stored in chatYt state for messageId:', yt.messageId);
-      
-      // Mark this message as recommended
-      setRecommendedMessages(prev => new Set([...prev, yt.messageId]));
+      // Store the recommendations or error for this message
+      if (yt.error) {
+        console.log('❌ Storing error for messageId:', yt.messageId);
+        setChatYt(prev => ({
+          ...prev,
+          [yt.messageId]: { error: yt.error }
+        }));
+      } else {
+        console.log('📹 Video count:', yt.recommendations.suggestions?.length || 0);
+        setChatYt(prev => ({
+          ...prev,
+          [yt.messageId]: yt.recommendations
+        }));
+        console.log('💾 Stored in chatYt state for messageId:', yt.messageId);
+        
+        // Mark this message as recommended (only for successful recommendations)
+        setRecommendedMessages(prev => new Set([...prev, yt.messageId]));
+      }
       
       // Clear loading state
       setLoadingChatYt(prev => ({
@@ -71,7 +80,7 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
         [yt.messageId]: false
       }));
       
-      console.log('✨ Recommendations should now be visible in the UI');
+      console.log('✨ Recommendations or error should now be visible in the UI');
     } else {
       console.log('⏭️ Skipping - conditions not met');
     }
@@ -833,6 +842,48 @@ export default function YouTubeSection({ yt, loadingYt, question, refreshYouTube
                   Clear
                 </button>
               </div>
+
+              {/* Error Display */}
+              {recommendations.error && (
+                <div style={{
+                  padding: "16px",
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  borderRadius: "8px",
+                  marginBottom: "16px"
+                }}>
+                  <div style={{ 
+                    fontSize: "14px", 
+                    fontWeight: 600, 
+                    color: "#ef4444",
+                    marginBottom: "8px"
+                  }}>
+                    ❌ Failed to Generate Recommendations
+                  </div>
+                  <div style={{ 
+                    fontSize: "13px", 
+                    color: "var(--muted)",
+                    marginBottom: "12px"
+                  }}>
+                    {recommendations.error}
+                  </div>
+                  <button
+                    onClick={() => generateFromChat(messageId)}
+                    style={{
+                      padding: "8px 16px",
+                      background: "rgba(239, 68, 68, 0.2)",
+                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                      borderRadius: "6px",
+                      color: "#ef4444",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      fontWeight: 600
+                    }}
+                  >
+                    🔄 Retry
+                  </button>
+                </div>
+              )}
 
               {/* Keywords */}
               {recommendations.extraction?.keywords && recommendations.extraction.keywords.length > 0 && (

@@ -11,7 +11,7 @@ const MessageSchema = new mongoose.Schema({
     snippet: String,
   }],
   createdAt: { type: Date, default: Date.now },
-}, { _id: false });
+}, { _id: true }); // Enable _id for messages so they can be referenced
 
 const ChatSchema = new mongoose.Schema({
   documentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Document', default: null },

@@ -118,7 +118,21 @@ export default function Study({ selected, docs }) {
       return true;
     } catch (error) {
       console.error('❌ Failed to generate video recommendations:', error);
-      alert('Failed to generate video recommendations. Please try again.');
+      
+      // Set error state in yt object
+      setYt({
+        messageId,
+        chatId: activeChatId,
+        mode: 'chat',
+        error: error.message || 'Failed to generate video recommendations'
+      });
+      
+      // Increment trigger to notify YouTubeSection
+      setTriggerChatYt(prev => prev + 1);
+      
+      // Switch to YouTube tab even on error
+      setActiveTab('youtube');
+      
       return false;
     } finally {
       setGeneratingChatYt(false);
@@ -283,13 +297,15 @@ export default function Study({ selected, docs }) {
           borderBottom: "1px solid #1f2b57",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "flex-end",
-          padding: "0 12px",
-          paddingTop: "8px",
-          flexShrink: 0
+          alignItems: "center",
+          padding: "0 10px",
+          paddingTop: "6px",
+          paddingBottom: "0",
+          flexShrink: 0,
+          minHeight: "40px"
         }}>
           {/* Tabs */}
-          <div style={{ display: "flex", gap: "4px" }}>
+          <div style={{ display: "flex", gap: "3px", alignItems: "flex-end" }}>
             {[
               { id: 'chat', label: '💬 Chat Tutor', icon: '💬' },
               { id: 'quiz', label: '📝 Quiz', icon: '📝' },
@@ -297,18 +313,16 @@ export default function Study({ selected, docs }) {
               { id: 'history', label: '📊 History', icon: '📊' }
             ].map((tab, index) => (
               <div key={tab.id} style={{ position: 'relative', display: 'flex' }}>
-                
-                
                 <button
                   onClick={() => setActiveTab(tab.id)}
                   style={{
                     background: activeTab === tab.id ? 'var(--panel)' : 'transparent',
                     border: activeTab === tab.id ? '1px solid rgba(124, 156, 255, 0.3)' : '1px solid transparent',
                     borderBottom: 'none',
-                    borderRadius: '8px 8px 0 0',
-                    padding: '10px 20px',
+                    borderRadius: '6px 6px 0 0',
+                    padding: '6px 14px',
                     color: activeTab === tab.id ? 'var(--text)' : 'var(--muted)',
-                    fontSize: '14px',
+                    fontSize: '12px',
                     fontWeight: activeTab === tab.id ? 600 : 400,
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
@@ -316,10 +330,11 @@ export default function Study({ selected, docs }) {
                     marginBottom: '-1px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
+                    gap: '4px',
                     boxShadow: activeTab === tab.id 
-                      ? '0 -2px 8px rgba(124, 156, 255, 0.4), 0 0 12px rgba(124, 156, 255, 0.2), inset 0 1px 0 rgba(124, 156, 255, 0.2)'
-                      : 'none'
+                      ? '0 -2px 6px rgba(124, 156, 255, 0.3), 0 0 8px rgba(124, 156, 255, 0.15)'
+                      : 'none',
+                    lineHeight: '1.2'
                   }}
                   onMouseEnter={(e) => {
                     if (activeTab !== tab.id) {
@@ -334,7 +349,7 @@ export default function Study({ selected, docs }) {
                     }
                   }}
                 >
-                  <span>{tab.icon}</span>
+                  <span style={{ fontSize: '13px' }}>{tab.icon}</span>
                   <span>{tab.label.replace(tab.icon + ' ', '')}</span>
                 </button>
               </div>
@@ -342,12 +357,12 @@ export default function Study({ selected, docs }) {
           </div>
 
           {/* Right actions */}
-          <div style={{ display: "flex", gap: "8px", paddingBottom: "8px" }}>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", paddingBottom: "6px" }}>
             <button
               className="secondary"
               onClick={() => setNotebookOpen(true)}
               title="Open Notebook"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '13px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: '11px', fontWeight: 500 }}
             >
               <span>📝</span>
               <span>Notebook</span>
@@ -356,10 +371,10 @@ export default function Study({ selected, docs }) {
             <button
               className="secondary"
               onClick={createNewChat}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '13px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: '11px', fontWeight: 500 }}
               title="Start New Chat"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               <span>New Chat</span>
@@ -368,10 +383,10 @@ export default function Study({ selected, docs }) {
             <button
               className="secondary"
               onClick={() => setChatHistoryVisible(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '13px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', fontSize: '11px', fontWeight: 500 }}
               title="View Chat History"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -381,7 +396,7 @@ export default function Study({ selected, docs }) {
         </div>
 
         {/* Content area with more space */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: "12px" }}>
 
           {/* Tab content */}
           {activeTab === 'chat' && (

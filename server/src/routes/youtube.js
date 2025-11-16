@@ -398,7 +398,7 @@ Extract all major topics to create a complete learning series.`;
     const seriesSystem = `You are creating a comprehensive YouTube learning series for an entire PDF document.
 
 RULES:
-1. Create 8-15 videos that cover the ENTIRE document from start to finish
+1. Create 12-20 videos that cover the ENTIRE document from start to finish
 2. Videos should be in LEARNING ORDER (basics -> advanced)
 3. Each video title: 3-5 words max
 4. Each video should have 2-4 relevant tags
@@ -504,7 +504,7 @@ router.post('/recommend-by-instruction', optionalAuth, async (req, res) => {
 
 RULES:
 1. Analyze the user's learning goal, context, and preferences
-2. Create 8-12 videos in optimal learning order
+2. Create 10-15 videos in optimal learning order
 3. Each video title: 3-5 words, specific and searchable
 4. Each video has 2-4 relevant tags
 5. Consider video type preference (beginner/advanced, theoretical/practical, etc.)
@@ -584,15 +584,17 @@ Generate an optimal learning path with specific, searchable video topics.`;
   }
 });
 
-// Recommend videos based on chat history analysis
+// Recommend videos based on a specific chat message
 router.post('/recommend-by-chat', optionalAuth, async (req, res) => {
   const { chatId, messageId } = req.body;
+  
+  console.log('📥 Received request:', { chatId, messageId, type: typeof messageId });
   
   if (!chatId) {
     return res.status(400).json({ error: 'chatId required' });
   }
   
-  if (!messageId) {
+  if (messageId === undefined || messageId === null) {
     return res.status(400).json({ error: 'messageId required' });
   }
   
@@ -602,70 +604,157 @@ router.post('/recommend-by-chat', optionalAuth, async (req, res) => {
     const chat = await Chat.findById(chatId);
     
     if (!chat) {
+      console.error('❌ Chat not found:', chatId);
       return res.status(404).json({ error: 'Chat not found' });
     }
     
-    // Find the specific message
-    const message = chat.messages.find(m => m._id.toString() === messageId);
-    if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
+    console.log('✅ Chat found:', { 
+      chatId, 
+      messageCount: chat.messages.length
+    });
+    
+    // Find the specific message - try multiple strategies
+    let messageIndex = -1;
+    let message = null;
+    
+    // Strategy 1: Try to find by _id (for new messages with _id)
+    if (typeof messageId === 'string' && messageId.length === 24) {
+      messageIndex = chat.messages.findIndex(m => m._id && m._id.toString() === messageId);
+      if (messageIndex !== -1) {
+        console.log('✅ Found message by _id at index:', messageIndex);
+      }
     }
     
-    // Get context by including a few messages before and after
-    const messageIndex = chat.messages.findIndex(m => m._id.toString() === messageId);
-    const contextMessages = chat.messages.slice(
-      Math.max(0, messageIndex - 2),
-      Math.min(chat.messages.length, messageIndex + 3)
-    );
+    // Strategy 2: Try to parse as index (for old messages or when index is passed)
+    if (messageIndex === -1) {
+      const parsedIndex = parseInt(messageId);
+      if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < chat.messages.length) {
+        messageIndex = parsedIndex;
+        console.log('✅ Found message by index:', messageIndex);
+      }
+    }
     
-    // Extract topics from chat messages with context
-    const chatContent = contextMessages
-      .map(m => m.content)
-      .join('\n');
+    // Strategy 3: If messageId is already a number, use it directly
+    if (messageIndex === -1 && typeof messageId === 'number') {
+      if (messageId >= 0 && messageId < chat.messages.length) {
+        messageIndex = messageId;
+        console.log('✅ Using messageId as index:', messageIndex);
+      }
+    }
     
-    const analysisSystem = `Analyze this chat conversation and identify key learning topics for video recommendations.
+    if (messageIndex === -1 || messageIndex >= chat.messages.length) {
+      console.error('❌ Message not found. Debug info:', {
+        requestedId: messageId,
+        requestedIdType: typeof messageId,
+        availableMessages: chat.messages.length,
+        sampleMessages: chat.messages.slice(0, 3).map((m, i) => ({ 
+          index: i, 
+          _id: m._id?.toString() || 'no-id', 
+          role: m.role,
+          textPreview: m.text.slice(0, 50) 
+        }))
+      });
+      return res.status(404).json({ 
+        error: 'Message not found',
+        debug: {
+          requestedId: messageId,
+          availableMessages: chat.messages.length,
+          hasIds: chat.messages.some(m => m._id)
+        }
+      });
+    }
+    
+    message = chat.messages[messageIndex];
+    console.log('✅ Message found:', { 
+      index: messageIndex, 
+      role: message.role,
+      textPreview: message.text.slice(0, 100) 
+    });
+    
+    // ONLY analyze the specific message that was clicked (not the entire conversation)
+    const messageContent = message.text;
+    
+    console.log('📝 Analyzing single message:', messageContent.slice(0, 200));
+    
+    const analysisSystem = `You are an educational content curator. Analyze this specific message and create relevant YouTube video recommendations.
 
 RULES:
-1. Extract 6-10 main topics discussed
-2. Create 8-12 video recommendations covering these topics
-3. Videos in learning order
-4. Each video has 2-4 tags
+1. Extract 5-8 main topics from THIS MESSAGE ONLY
+2. Create 6-10 video recommendations covering these topics
+3. Videos should be in learning order (basics → advanced)
+4. Each video title: 3-5 words max
+5. Each video has 2-4 relevant tags
+6. Focus ONLY on the content of this specific message
 
-Return JSON:
+Return ONLY valid JSON:
 {
   "topics": ["topic1", "topic2", ...],
-  "videos": [{"title": "...", "description": "...", "tags": [...]}]
+  "videos": [
+    {
+      "title": "Short video title",
+      "description": "What this video covers",
+      "tags": ["tag1", "tag2"]
+    }
+  ]
 }`;
 
-    const analysisPrompt = `Analyze this chat and suggest educational videos:
+    const analysisPrompt = `Analyze this specific message and suggest educational videos:
 
-${chatContent}`;
+Message: "${messageContent}"
 
+Create video recommendations that help understand the topics discussed in THIS MESSAGE.`;
+
+    console.log('🤖 Calling AI to analyze message...');
     const analysisResult = await generateText({
       prompt: analysisPrompt,
       system: analysisSystem,
-      temperature: 0.4
+      temperature: 0.5
     });
+    
+    console.log('📊 AI analysis result length:', analysisResult.length);
     
     let analysis;
     try {
       const cleanResult = analysisResult.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       analysis = JSON.parse(cleanResult);
-    } catch {
-      return res.status(500).json({ error: 'Failed to analyze chat' });
+      console.log('✅ Parsed analysis:', { 
+        topicsCount: analysis.topics?.length, 
+        videosCount: analysis.videos?.length 
+      });
+    } catch (parseError) {
+      console.error('❌ Failed to parse AI analysis:', parseError.message);
+      console.error('Raw result:', analysisResult.slice(0, 500));
+      return res.status(500).json({ 
+        error: 'Failed to analyze message',
+        debug: {
+          parseError: parseError.message,
+          rawResult: analysisResult.slice(0, 500)
+        }
+      });
     }
     
-    // Fetch actual videos
-    const suggestions = [];
+    if (!analysis.videos || analysis.videos.length === 0) {
+      console.error('❌ No videos in analysis result');
+      return res.status(500).json({ 
+        error: 'No video recommendations generated',
+        debug: { analysis }
+      });
+    }
     
-    for (let index = 0; index < Math.min(analysis.videos.length, 12); index++) {
+    // Fetch actual videos from YouTube
+    const suggestions = [];
+    console.log('🔍 Fetching videos from YouTube...');
+    
+    for (let index = 0; index < Math.min(analysis.videos.length, 10); index++) {
       const video = analysis.videos[index];
       const tags = video.tags && video.tags.length > 0 ? video.tags.slice(0, 2).join(' ') : '';
-      const searchQuery = `${video.title} ${tags} explained`;
+      const searchQuery = `${video.title} ${tags} tutorial explained`;
       
+      console.log(`🔎 Searching video ${index + 1}:`, searchQuery);
       const videoDetails = await getVideoDetailsFromSearch(searchQuery);
       
       if (videoDetails) {
+        console.log(`✅ Found video ${index + 1}:`, videoDetails.title);
         suggestions.push({
           title: videoDetails.title,
           description: video.description,
@@ -676,13 +765,28 @@ ${chatContent}`;
           tags: video.tags || [],
           query: searchQuery
         });
+      } else {
+        console.warn(`⚠️ No video found for: ${searchQuery}`);
       }
       
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+    
+    console.log(`✅ Total videos found: ${suggestions.length}`);
+    
+    if (suggestions.length === 0) {
+      return res.status(500).json({ 
+        error: 'No videos found on YouTube',
+        debug: { 
+          analyzedTopics: analysis.topics,
+          attemptedQueries: analysis.videos.map(v => v.title)
+        }
+      });
     }
     
     res.json({
-      chatAnalysis: `Analyzed ${chat.messages.length} messages`,
+      chatAnalysis: `Analyzed message at index ${messageIndex}`,
+      messageContent: messageContent.slice(0, 200),
       extraction: {
         keywords: analysis.topics || [],
         mainTopics: analysis.topics ? analysis.topics.slice(0, 3) : []
@@ -692,8 +796,12 @@ ${chatContent}`;
     });
     
   } catch (error) {
-    console.error('Chat-based recommendation error:', error);
-    res.status(500).json({ error: 'Failed to analyze chat', message: error.message });
+    console.error('❌ Chat-based recommendation error:', error);
+    res.status(500).json({ 
+      error: 'Failed to analyze message', 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

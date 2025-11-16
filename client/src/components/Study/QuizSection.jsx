@@ -510,42 +510,101 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
               scrollbar-width: none;
             }
           `}</style>
-          <div style={{ marginBottom: "20px" }}>
-            <h2 style={{ marginTop: 0, marginBottom: "8px", color: "var(--accent)" }}>Quiz Generator</h2>
-            <p style={{ color: "var(--muted)", marginBottom: "16px" }}>
+          <div style={{ marginBottom: "15px" }}>
+            <h2 style={{ marginTop: 0, marginBottom: "6px", color: "var(--accent)", fontSize: "18px" }}>Quiz Generator</h2>
+            <p style={{ color: "var(--muted)", marginBottom: "12px", fontSize: "13px" }}>
               Generate customized quizzes based on your PDF content. Choose question types and counts.
             </p>
           </div>
 
-          {/* Mode selection */}
-          <div style={{ marginBottom: "12px" }}>
-            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input 
-                  type="radio" 
-                  name="quizMode" 
-                  value="auto" 
-                  checked={quizMode === "auto"} 
-                  onChange={() => setQuizMode("auto")} 
-                  disabled={!selected || selected === 'all'}
-                />
-                <span>Auto (current PDF) {(!selected || selected === 'all') && '(Select a PDF first)'}</span>
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="radio"
-                  name="quizMode"
-                  value="select"
-                  checked={quizMode === "select"}
-                  onChange={() => { if (selected && selected !== 'all') setQuizMode("select") }}
-                  disabled={!selected || selected === 'all'}
-                />
-                <span>Select Topics from PDF {(!selected || selected === 'all') && '(Select a PDF first)'}</span>
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input type="radio" name="quizMode" value="custom" checked={quizMode === "custom"} onChange={() => setQuizMode("custom")} />
-                <span>General Quiz (Custom Instructions)</span>
-              </label>
+          {/* Mode selection - Tab style */}
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ 
+              display: "flex", 
+              justifyContent: "center", 
+              gap: "4px", 
+              marginBottom: 12,
+              flexWrap: 'wrap',
+              background: "#0a0f24",
+              borderBottom: "1px solid #1f2b57",
+              padding: "6px 8px 0 8px",
+              borderRadius: "8px 8px 0 0"
+            }}>
+              {[
+                { 
+                  id: 'auto', 
+                  label: 'Auto (current PDF)', 
+                  disabled: !selected || selected === 'all',
+                  tooltip: (!selected || selected === 'all') ? '(Select a PDF first)' : ''
+                },
+                { 
+                  id: 'select', 
+                  label: 'Select Topics from PDF', 
+                  disabled: !selected || selected === 'all',
+                  tooltip: (!selected || selected === 'all') ? '(Select a PDF first)' : ''
+                },
+                { 
+                  id: 'custom', 
+                  label: 'General Quiz (Custom Instructions)', 
+                  disabled: false,
+                  tooltip: ''
+                }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    if (!tab.disabled) {
+                      if (tab.id === 'select' && selected && selected !== 'all') {
+                        setQuizMode("select");
+                      } else if (tab.id === 'auto') {
+                        setQuizMode("auto");
+                      } else if (tab.id === 'custom') {
+                        setQuizMode("custom");
+                      }
+                    }
+                  }}
+                  disabled={tab.disabled}
+                  style={{
+                    background: quizMode === tab.id ? 'var(--panel)' : 'transparent',
+                    border: quizMode === tab.id ? '1px solid rgba(124, 156, 255, 0.3)' : '1px solid transparent',
+                    borderBottom: 'none',
+                    borderRadius: '6px 6px 0 0',
+                    padding: '6px 14px',
+                    color: tab.disabled ? '#555' : (quizMode === tab.id ? 'var(--text)' : 'var(--muted)'),
+                    fontSize: '12px',
+                    fontWeight: quizMode === tab.id ? 600 : 400,
+                    cursor: tab.disabled ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                    marginBottom: '-1px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    boxShadow: quizMode === tab.id 
+                      ? '0 -2px 6px rgba(124, 156, 255, 0.3), 0 0 8px rgba(124, 156, 255, 0.15)'
+                      : 'none',
+                    opacity: tab.disabled ? 0.5 : 1,
+                    lineHeight: '1.2'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (quizMode !== tab.id && !tab.disabled) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = 'var(--text)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (quizMode !== tab.id && !tab.disabled) {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--muted)';
+                    }
+                  }}
+                  title={tab.tooltip}
+                >
+                  <span>{tab.label}</span>
+                  {tab.tooltip && <span style={{ fontSize: '10px', opacity: 0.7 }}>{tab.tooltip}</span>}
+                </button>
+              ))}
             </div>
             
             {/* Info message for custom mode when no PDF */}
@@ -735,7 +794,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
 
             {/* Custom prompt input */}
             {quizMode === "custom" && (
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 9 }}>
                 <textarea
                   rows={3}
                   value={quizPrompt}
@@ -747,12 +806,13 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                   }
                   style={{
                     width: "80%",
-                    padding: "10px 12px",
-                    borderRadius: 8,
+                    padding: "8px 10px",
+                    borderRadius: 6,
                     background: "#050b29ff",
                     color: "var(--text)",
                     border: "2px solid var(--accent)",
                     resize: "vertical",
+                    fontSize: "13px",
                   }}
                 />
               </div>
@@ -761,59 +821,59 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
 
           {/* Timer and Difficulty selector tile */}
           <div style={{
-            marginBottom: 20,
+            marginBottom: 15,
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 46,
+            gap: 35,
             justifyContent: 'center',
             alignItems: 'stretch',
           }}>
             {/* Timer Card */}
             <div style={{
-              flex: '1 1 260px',
-              minWidth: 240,
-              maxWidth: 340,
+              flex: '1 1 195px',
+              minWidth: 180,
+              maxWidth: 255,
               background: 'rgba(124, 156, 255, 0.07)',
-              borderRadius: 12,
+              borderRadius: 9,
               border: '1.5px solid var(--border)',
-              padding: 20,
-              boxShadow: '0 2px 12px rgba(124,156,255,0.07)',
+              padding: 15,
+              boxShadow: '0 2px 9px rgba(124,156,255,0.07)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 6 }}>
                 <input 
                   type="checkbox" 
                   checked={isTimedQuiz}
                   onChange={(e) => setIsTimedQuiz(e.target.checked)}
-                  style={{ width: 20, height: 20, cursor: 'pointer', accentColor: 'var(--accent)' }}
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--accent)' }}
                 />
-                <span style={{ fontWeight: 700, fontSize: '1.1em', color: 'var(--accent2)' }}>⏱️ Timed Quiz</span>
+                <span style={{ fontWeight: 700, fontSize: '0.9em', color: 'var(--accent2)' }}>⏱️ Timed Quiz</span>
               </label>
               {isTimedQuiz && (
-                <div style={{ marginTop: 10, width: '100%' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', width: '100%' }}>
-                    <span style={{ fontSize: '0.97em', color: 'var(--muted)' }}>Time Limit:</span>
+                <div style={{ marginTop: 8, width: '100%' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', width: '100%' }}>
+                    <span style={{ fontSize: '0.85em', color: 'var(--muted)' }}>Time Limit:</span>
                     <button
                       type="button"
                       aria-label="Decrease time"
                       onClick={() => setTimeLimit(t => Math.max(1, t - 1))}
                       style={{
-                        width: 32,
-                        height: 32,
+                        width: 24,
+                        height: 24,
                         borderRadius: '50%',
                         border: 'none',
                         background: 'var(--accent)',
                         color: 'white',
                         fontWeight: 700,
-                        fontSize: 20,
+                        fontSize: 16,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 1px 4px rgba(124,156,255,0.10)',
+                        boxShadow: '0 1px 3px rgba(124,156,255,0.10)',
                         transition: 'background 0.2s',
                       }}
                     >
@@ -829,15 +889,15 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                         setTimeLimit(Math.max(1, Math.min(180, v || 1)));
                       }}
                       style={{
-                        width: 48,
+                        width: 36,
                         textAlign: 'center',
-                        padding: '6px',
-                        borderRadius: 6,
+                        padding: '4px',
+                        borderRadius: 5,
                         background: 'var(--input-bg)',
                         color: 'var(--text)',
                         border: '1px solid var(--border)',
                         fontWeight: 600,
-                        fontSize: '1.1em',
+                        fontSize: '0.9em',
                         MozAppearance: 'textfield',
                         appearance: 'textfield',
                       }}
@@ -847,40 +907,40 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                       aria-label="Increase time"
                       onClick={() => setTimeLimit(t => Math.min(180, t + 1))}
                       style={{
-                        width: 32,
-                        height: 32,
+                        width: 24,
+                        height: 24,
                         borderRadius: '50%',
                         border: 'none',
                         background: 'var(--accent)',
                         color: 'white',
                         fontWeight: 700,
-                        fontSize: 20,
+                        fontSize: 16,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 1px 4px rgba(124,156,255,0.10)',
+                        boxShadow: '0 1px 3px rgba(124,156,255,0.10)',
                         transition: 'background 0.2s',
                       }}
                     >
                       +
                     </button>
-                    <span style={{ fontSize: '0.97em', color: 'var(--muted)' }}>minutes</span>
+                    <span style={{ fontSize: '0.85em', color: 'var(--muted)' }}>minutes</span>
                   </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 10 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 8 }}>
                     {[10, 15, 30, 45, 60, 90, 120, 180].map(val => (
                       <button
                         key={val}
                         type="button"
                         onClick={() => setTimeLimit(val)}
                         style={{
-                          padding: '4px 14px',
-                          borderRadius: 16,
+                          padding: '3px 10px',
+                          borderRadius: 12,
                           border: timeLimit === val ? '2px solid var(--accent)' : '1.5px solid var(--border)',
                           background: timeLimit === val ? 'var(--accent)' : 'var(--input-bg)',
                           color: timeLimit === val ? 'white' : 'var(--text)',
                           fontWeight: 600,
-                          fontSize: '0.98em',
+                          fontSize: '0.85em',
                           cursor: 'pointer',
                           transition: 'all 0.15s',
                           marginBottom: 2,
@@ -890,7 +950,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                       </button>
                     ))}
                   </div>
-                  <div style={{ fontSize: '0.82em', color: 'var(--muted)', marginTop: 6, fontStyle: 'italic', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.75em', color: 'var(--muted)', marginTop: 5, fontStyle: 'italic', textAlign: 'center' }}>
                     Quiz will auto-submit when time expires
                   </div>
                 </div>
@@ -898,34 +958,34 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
             </div>
             {/* Difficulty Card */}
             <div style={{
-              flex: '1 1 260px',
-              minWidth: 240,
-              maxWidth: 340,
+              flex: '1 1 195px',
+              minWidth: 180,
+              maxWidth: 255,
               background: 'rgba(124, 156, 255, 0.07)',
-              borderRadius: 12,
+              borderRadius: 9,
               border: '1.5px solid var(--border)',
-              padding: 20,
-              boxShadow: '0 2px 12px rgba(124,156,255,0.07)',
+              padding: 15,
+              boxShadow: '0 2px 9px rgba(124,156,255,0.07)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <label style={{ fontWeight: 700, fontSize: '1.1em', color: 'var(--accent2)', marginBottom: 10 }}>🎯 Difficulty</label>
+              <label style={{ fontWeight: 700, fontSize: '0.9em', color: 'var(--accent2)', marginBottom: 8 }}>🎯 Difficulty</label>
               <select
                 value={difficulty}
                 onChange={e => setDifficulty(e.target.value)}
                 style={{
-                  padding: '10px 24px',
-                  borderRadius: 8,
+                  padding: '8px 18px',
+                  borderRadius: 6,
                   background: 'var(--input-bg)',
                   color: 'var(--text)',
                   border: '1.5px solid var(--border)',
-                  fontSize: '1.08em',
+                  fontSize: '0.9em',
                   fontWeight: 600,
                   outline: 'none',
-                  boxShadow: '0 1px 4px rgba(124,156,255,0.08)',
-                  marginBottom: 6,
+                  boxShadow: '0 1px 3px rgba(124,156,255,0.08)',
+                  marginBottom: 5,
                   cursor: 'pointer',
                   transition: 'border 0.2s, box-shadow 0.2s',
                 }}
@@ -934,7 +994,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                 <option value="medium">Medium</option>
                 <option value="hard">Hard</option>
               </select>
-              <div style={{ fontSize: '0.88em', color: 'var(--muted)', marginTop: 4, textAlign: 'center' }}>
+              <div style={{ fontSize: '0.75em', color: 'var(--muted)', marginTop: 3, textAlign: 'center' }}>
                 Choose how challenging you want your quiz
               </div>
             </div>
@@ -944,9 +1004,9 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: "16px",
-              marginBottom: "20px",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: "12px",
+              marginBottom: "15px",
             }}
           >
             {[
@@ -955,12 +1015,12 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
               { label: "Short Answer Questions (SAQ)", icon: "📝", desc: "2–3 sentence conceptual answers", state: saqCount, setter: setSaqCount, max: 10 },
               { label: "Long Answer Questions (LAQ)", icon: "📄", desc: "Detailed analytical explanations", state: laqCount, setter: setLaqCount, max: 5 },
             ].map((q) => (
-              <div key={q.label} className="section" style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "2em", marginBottom: "8px" }}>{q.icon}</div>
-                <h4 style={{ marginTop: 0, marginBottom: "8px", color: "var(--accent2)" }}>{q.label}</h4>
-                <p style={{ fontSize: "0.9em", color: "var(--muted)", marginBottom: "12px" }}>{q.desc}</p>
+              <div key={q.label} className="section" style={{ textAlign: "center", padding: "10px" }}>
+                <div style={{ fontSize: "1.5em", marginBottom: "6px" }}>{q.icon}</div>
+                <h4 style={{ marginTop: 0, marginBottom: "6px", color: "var(--accent2)", fontSize: "13px" }}>{q.label}</h4>
+                <p style={{ fontSize: "0.8em", color: "var(--muted)", marginBottom: "9px" }}>{q.desc}</p>
                 <div>
-                  <div style={{ fontSize: "0.85em", color: "var(--muted)", marginBottom: "4px" }}>
+                  <div style={{ fontSize: "0.75em", color: "var(--muted)", marginBottom: "3px" }}>
                     Number of Questions
                   </div>
                   <input
@@ -969,7 +1029,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                     max={q.max}
                     value={q.state}
                     onChange={(e) => q.setter(e.target.value)}
-                    style={{ width: "100px", textAlign: "center" }}
+                    style={{ width: "75px", textAlign: "center", padding: "6px", fontSize: "13px" }}
                   />
                 </div>
               </div>
@@ -991,7 +1051,7 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
           </div> */}
 
           {/* Generate and Clear buttons */}
-          <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "9px", marginBottom: "15px" }}>
             {/* Clear Quiz Button */}
             {(quiz || score) && (
               <button
@@ -1017,18 +1077,18 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                   setToast({ message: 'Quiz cleared! Ready to generate a new quiz.', type: 'success' });
                 }}
                 style={{
-                  padding: "12px 24px",
-                  fontSize: "16px",
+                  padding: "9px 18px",
+                  fontSize: "13px",
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "6px",
                   background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                   color: "white",
                   border: "none",
-                  borderRadius: "8px",
+                  borderRadius: "6px",
                   cursor: "pointer",
                   fontWeight: 600,
-                  boxShadow: "0 4px 12px rgba(102, 126, 234, 0.3)",
+                  boxShadow: "0 3px 9px rgba(102, 126, 234, 0.3)",
                 }}
               >
                 <span>🗑️</span>
@@ -1047,11 +1107,11 @@ export default function QuizSection({ api, selected, docs, loadAttemptHistory, r
                 (quizMode === 'select' && selectedTopics.length === 0)
               }
               style={{
-                padding: "12px 24px",
-                fontSize: "16px",
+                padding: "9px 18px",
+                fontSize: "13px",
                 display: "flex",
                 alignItems: "center",
-                gap: "8px",
+                gap: "6px",
               }}
             >
               {loadingQuiz ? (
